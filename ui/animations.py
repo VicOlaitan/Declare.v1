@@ -230,7 +230,7 @@ def _draw_flash(screen, event):
     alpha = max(0, int(80 * (1.0 - event.progress)))
     if alpha <= 0:
         return
-    color = event.text_color if event.text_color != (255, 215, 0) else (80, 180, 255)
+    color = event.text_color
     flash_surf = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
     flash_surf.fill((*color, alpha))
     screen.blit(flash_surf, (0, 0))

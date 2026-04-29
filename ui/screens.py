@@ -28,7 +28,32 @@ class Button:
 
     def draw(self, screen, font):
         color = self.hover_color if self.is_hovered else self.color
+
+        shadow_surf = pygame.Surface((self.rect.width + 4, self.rect.height + 4), pygame.SRCALPHA)
+        pygame.draw.rect(shadow_surf, (0, 0, 0, 60), (2, 3, self.rect.width, self.rect.height), border_radius=CORNER_RADIUS)
+        screen.blit(shadow_surf, (self.rect.x - 2, self.rect.y + 3))
+
         pygame.draw.rect(screen, color, self.rect, border_radius=CORNER_RADIUS)
+
+        c_r = max(color[0] - 35, 0)
+        c_g = max(color[1] - 35, 0)
+        c_b = max(color[2] - 35, 0)
+        pygame.draw.line(screen, (c_r, c_g, c_b),
+                         (self.rect.left + 3, self.rect.bottom - 3),
+                         (self.rect.right - 3, self.rect.bottom - 3), 2)
+        pygame.draw.line(screen, (c_r, c_g, c_b),
+                         (self.rect.right - 3, self.rect.top + 3),
+                         (self.rect.right - 3, self.rect.bottom - 3), 2)
+        l_r = min(color[0] + 40, 255)
+        l_g = min(color[1] + 40, 255)
+        l_b = min(color[2] + 40, 255)
+        pygame.draw.line(screen, (l_r, l_g, l_b),
+                         (self.rect.left + 3, self.rect.top + 3),
+                         (self.rect.right - 3, self.rect.top + 3), 2)
+        pygame.draw.line(screen, (l_r, l_g, l_b),
+                         (self.rect.left + 3, self.rect.top + 3),
+                         (self.rect.left + 3, self.rect.bottom - 3), 2)
+
         pygame.draw.rect(screen, BLACK, self.rect, width=2, border_radius=CORNER_RADIUS)
         text_surf = font.render(self.text, True, self.text_color)
         text_rect = text_surf.get_rect(center=self.rect.center)
@@ -49,25 +74,71 @@ class MenuScreen:
         self.title_font = pygame.font.SysFont("segoeui", TITLE_FONT_SIZE, bold=True)
         self.subtitle_font = pygame.font.SysFont("segoeui", SUBTITLE_FONT_SIZE)
         self.button_font = pygame.font.SysFont("segoeui", UI_FONT_SIZE)
-        self.new_game_button = Button(SCREEN_WIDTH // 2, 420, 260, 54, "New Game", SWAP_GREEN, SWAP_GREEN_HOVER)
-        self.quit_button = Button(SCREEN_WIDTH // 2, 490, 260, 54, "Quit", DECLARE_RED, DECLARE_RED_HOVER)
+        self.new_game_button = Button(SCREEN_WIDTH // 2, 430, 260, 54, "New Game", SWAP_GREEN, SWAP_GREEN_HOVER)
+        self.quit_button = Button(SCREEN_WIDTH // 2, 500, 260, 54, "Quit", DECLARE_RED, DECLARE_RED_HOVER)
         self.buttons = [self.new_game_button, self.quit_button]
+
+    def _draw_menu_card_back(self, cx, cy, angle=0):
+        surf = pygame.Surface((CARD_WIDTH + 20, CARD_HEIGHT + 20), pygame.SRCALPHA)
+        rect = pygame.Rect(10, 10, CARD_WIDTH, CARD_HEIGHT)
+        pygame.draw.rect(surf, CARD_BACK_BLUE, rect, border_radius=CORNER_RADIUS)
+        inner = pygame.Rect(16, 16, CARD_WIDTH - 12, CARD_HEIGHT - 12)
+        pygame.draw.rect(surf, CARD_BACK_PATTERN, inner, border_radius=CORNER_RADIUS - 2)
+        line_color = (50, 90, 170, 40)
+        inner_w, inner_h = CARD_WIDTH - 20, CARD_HEIGHT - 20
+        cross_surf = pygame.Surface((inner_w, inner_h), pygame.SRCALPHA)
+        for i in range(0, max(inner_w, inner_h), 12):
+            if i < inner_w:
+                pygame.draw.line(cross_surf, line_color, (i, 0), (i, inner_h))
+            if i < inner_h:
+                pygame.draw.line(cross_surf, line_color, (0, i), (inner_w, i))
+        surf.blit(cross_surf, (10, 10))
+        dcx = 10 + CARD_WIDTH // 2
+        dcy = 10 + CARD_HEIGHT // 2
+        outer_ring_pts = [
+            (dcx, dcy - 30), (dcx + 10, dcy - 28), (dcx + 18, dcy - 20),
+            (dcx + 20, dcy - 10), (dcx + 22, dcy), (dcx + 20, dcy + 10),
+            (dcx + 18, dcy + 20), (dcx + 10, dcy + 28), (dcx, dcy + 30),
+            (dcx - 10, dcy + 28), (dcx - 18, dcy + 20), (dcx - 20, dcy + 10),
+            (dcx - 22, dcy), (dcx - 20, dcy - 10), (dcx - 18, dcy - 20),
+            (dcx - 10, dcy - 28),
+        ]
+        pygame.draw.polygon(surf, (50, 90, 170), outer_ring_pts)
+        pygame.draw.polygon(surf, (200, 220, 255), outer_ring_pts, 1)
+        inner_diamond = [(dcx, dcy - 14), (dcx + 14, dcy), (dcx, dcy + 14), (dcx - 14, dcy)]
+        pygame.draw.polygon(surf, (80, 120, 190), inner_diamond)
+        pygame.draw.polygon(surf, (200, 220, 255), inner_diamond, 1)
+        pygame.draw.circle(surf, (220, 235, 255), (dcx, dcy), 3)
+        pygame.draw.rect(surf, TEXT_WHITE, rect, 1, border_radius=CORNER_RADIUS)
+        if angle != 0:
+            surf = pygame.transform.rotate(surf, angle)
+        self.screen.blit(surf, (cx - (CARD_WIDTH + 20) // 2, cy - (CARD_HEIGHT + 20) // 2))
 
     def draw(self):
         self.screen.fill(BG_DARK)
+
+        vignette = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        for i in range(0, 300, 6):
+            alpha = int(40 * (1 - i / 300))
+            pygame.draw.rect(vignette, (10, 10, 15, alpha),
+                             (i, i, SCREEN_WIDTH - 2 * i, SCREEN_HEIGHT - 2 * i), border_radius=20)
+        self.screen.blit(vignette, (0, 0))
+
+        card_fan = [(-110, 295, -12), (-55, 290, -4), (0, 288, 0), (55, 290, 4), (110, 295, 12)]
+        for dx, cy, angle in card_fan:
+            cx = SCREEN_WIDTH // 2 + dx
+            self._draw_menu_card_back(cx, cy, angle)
+
         title_surf = self.title_font.render("DECLARE", True, GOLD)
-        self.screen.blit(title_surf, title_surf.get_rect(center=(SCREEN_WIDTH // 2, 180)))
+        shadow_surf = self.title_font.render("DECLARE", True, (50, 30, 0))
+        title_rect = title_surf.get_rect(center=(SCREEN_WIDTH // 2 + 2, 162))
+        self.screen.blit(shadow_surf, title_rect)
+        title_rect2 = title_surf.get_rect(center=(SCREEN_WIDTH // 2, 160))
+        self.screen.blit(title_surf, title_rect2)
+
         subtitle_surf = self.subtitle_font.render("A Card Game of Memory & Strategy", True, TEXT_DIM)
-        self.screen.blit(subtitle_surf, subtitle_surf.get_rect(center=(SCREEN_WIDTH // 2, 240)))
-        card_positions = [-150, -50, 50, 150]
-        for dx in card_positions:
-            cx = SCREEN_WIDTH // 2 + dx - CARD_WIDTH // 2
-            cy = 310 - CARD_HEIGHT // 2
-            rect = pygame.Rect(cx, cy, CARD_WIDTH, CARD_HEIGHT)
-            pygame.draw.rect(self.screen, CARD_BACK_BLUE, rect, border_radius=CORNER_RADIUS)
-            pygame.draw.rect(self.screen, BLACK, rect, width=2, border_radius=CORNER_RADIUS)
-            inner = pygame.Rect(cx + 8, cy + 8, CARD_WIDTH - 16, CARD_HEIGHT - 16)
-            pygame.draw.rect(self.screen, CARD_BACK_PATTERN, inner, border_radius=4)
+        self.screen.blit(subtitle_surf, subtitle_surf.get_rect(center=(SCREEN_WIDTH // 2, 205)))
+
         for button in self.buttons:
             button.draw(self.screen, self.button_font)
 

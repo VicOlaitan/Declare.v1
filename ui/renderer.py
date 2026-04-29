@@ -117,6 +117,30 @@ class Renderer:
         pygame.draw.ellipse(felt_surf, (30, 95, 50, 80), (0, 0, rx * 2, ry * 2))
         self.screen.blit(felt_surf, (center[0] - rx, center[1] - ry))
         pygame.draw.ellipse(self.screen, (50, 130, 70), (center[0] - rx, center[1] - ry, rx * 2, ry * 2), 2)
+        pygame.draw.ellipse(self.screen, (35, 80, 45), (center[0] - rx - 8, center[1] - ry - 8, rx * 2 + 16, ry * 2 + 16), 4)
+
+        vignette_surf = pygame.Surface((rx * 2, ry * 2), pygame.SRCALPHA)
+        for i in range(0, 200, 4):
+            alpha = int(60 * (i / 200))
+            r = rx * 2 - i * 2
+            rh = ry * 2 - i
+            expanded_rect = pygame.Rect((rx * 2 - r) // 2, (ry * 2 - rh) // 2, r, rh)
+            pygame.draw.ellipse(vignette_surf, (20, 50, 30, alpha), expanded_rect)
+        self.screen.blit(vignette_surf, (center[0] - rx, center[1] - ry))
+
+        import random
+        random.seed(42)
+        felt_dot_surf = pygame.Surface((rx * 2, ry * 2), pygame.SRCALPHA)
+        for _ in range(250):
+            px = center[0] - rx + random.randint(0, rx * 2)
+            py = center[1] - ry + random.randint(0, ry * 2)
+            dx = px - center[0]
+            dy = py - center[1]
+            if (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) < 1:
+                alpha = random.randint(8, 22)
+                dot_size = random.randint(1, 2)
+                pygame.draw.circle(felt_dot_surf, (30, 100, 55, alpha), (px - center[0] + rx, py - center[1] + ry), dot_size)
+        self.screen.blit(felt_dot_surf, (center[0] - rx, center[1] - ry))
 
     def _draw_status_bar(self, game_manager):
         bar_rect = pygame.Rect(0, 0, SCREEN_WIDTH, STATUS_BAR_H)
@@ -139,18 +163,36 @@ class Renderer:
             bg_color = (255, 255, 230)
         self._draw_rounded_rect(self.screen, bg_color, rect, CORNER_RADIUS)
         color = RED if card.is_red else BLACK
+
+        inner_rect = pygame.Rect(x + 4, y + 4, CARD_WIDTH - 8, CARD_HEIGHT - 8)
+        pygame.draw.rect(self.screen, (225, 225, 230), inner_rect, 1, border_radius=CORNER_RADIUS - 2)
+
+        accent_rect = pygame.Rect(x, y, 6, CARD_HEIGHT)
+        accent_inner = pygame.Rect(x + 2, y + 2, 4, CARD_HEIGHT - 4)
+        pygame.draw.rect(self.screen, (200, 200, 205), accent_rect, border_radius=3)
+        pygame.draw.rect(self.screen, color, accent_inner, border_radius=2)
+
+        self._draw_suit_pips(x, y, card)
+
         big_surf = self.card_big_font.render(card.rank, True, color)
-        big_rect = big_surf.get_rect(center=(x + CARD_WIDTH // 2, y + CARD_HEIGHT // 2 - 8))
+        big_rect = big_surf.get_rect(center=(x + CARD_WIDTH // 2 + 8, y + CARD_HEIGHT // 2 - 8))
         self.screen.blit(big_surf, big_rect)
         suit_surf = self.card_font.render(card.suit_symbol, True, color)
-        suit_rect = suit_surf.get_rect(center=(x + CARD_WIDTH // 2, y + CARD_HEIGHT // 2 + 16))
+        suit_rect = suit_surf.get_rect(center=(x + CARD_WIDTH // 2 + 8, y + CARD_HEIGHT // 2 + 16))
         self.screen.blit(suit_surf, suit_rect)
+
+        if card.rank in ('J', 'Q', 'K'):
+            self._draw_crown(x, y, card)
+
         corner_text = f"{card.rank}{card.suit_symbol}"
+        badge_rect = pygame.Rect(x + 2, y + 1, 32, 18)
+        pygame.draw.rect(self.screen, (240, 240, 245), badge_rect, border_radius=3)
         tl_surf = self.small_font.render(corner_text, True, color)
         self.screen.blit(tl_surf, (x + 5, y + 4))
         br_surf = self.small_font.render(corner_text, True, color)
         br_rect = br_surf.get_rect(bottomright=(x + CARD_WIDTH - 5, y + CARD_HEIGHT - 4))
         self.screen.blit(br_surf, br_rect)
+
         if show_power_label and card.power is not None:
             power_color = POWER_COLORS.get(card.power, TEXT_WHITE)
             power_label = POWER_LABELS.get(card.power, card.power)
@@ -162,27 +204,194 @@ class Renderer:
         pygame.draw.rect(self.screen, (180, 180, 180), rect, 1, border_radius=CORNER_RADIUS)
         return rect
 
+    def _draw_suit_pips(self, x, y, card):
+        color = RED if card.is_red else BLACK
+        cx = x + CARD_WIDTH // 2
+        cy = y + CARD_HEIGHT // 2
+        w, h = CARD_WIDTH, CARD_HEIGHT
+
+        def pip(px, py, size=8):
+            pts = [(px, py - size), (px + size * 0.65, py + size * 0.5),
+                   (px - size * 0.65, py + size * 0.5)]
+            pygame.draw.polygon(self.screen, color, pts)
+
+        def diam(px, py, size=8):
+            pts = [(px, py - size), (px + size, py), (px, py + size), (px - size, py)]
+            pygame.draw.polygon(self.screen, color, pts)
+
+        rank = card.rank
+        if rank == 'A':
+            pip(cx, cy)
+        elif rank == '2':
+            pip(cx, cy - 26)
+            pip(cx, cy + 26)
+        elif rank == '3':
+            pip(cx, cy - 26)
+            pip(cx, cy + 26)
+            pip(cx, cy)
+        elif rank == '4':
+            pip(cx - 20, cy - 18)
+            pip(cx + 20, cy - 18)
+            pip(cx - 20, cy + 18)
+            pip(cx + 20, cy + 18)
+        elif rank == '5':
+            pip(cx - 20, cy - 18)
+            pip(cx + 20, cy - 18)
+            pip(cx - 20, cy + 18)
+            pip(cx + 20, cy + 18)
+            pip(cx, cy)
+        elif rank == '6':
+            pip(cx - 20, cy - 22)
+            pip(cx + 20, cy - 22)
+            pip(cx - 20, cy)
+            pip(cx + 20, cy)
+            pip(cx - 20, cy + 22)
+            pip(cx + 20, cy + 22)
+        elif rank == '7':
+            pip(cx - 20, cy - 22)
+            pip(cx + 20, cy - 22)
+            pip(cx - 20, cy)
+            pip(cx + 20, cy)
+            pip(cx - 20, cy + 22)
+            pip(cx + 20, cy + 22)
+            pip(cx, cy - 32)
+        elif rank == '8':
+            pip(cx - 20, cy - 22)
+            pip(cx + 20, cy - 22)
+            pip(cx - 20, cy)
+            pip(cx + 20, cy)
+            pip(cx - 20, cy + 22)
+            pip(cx + 20, cy + 22)
+            pip(cx, cy - 32)
+            pip(cx, cy + 32)
+        elif rank == '9':
+            pip(cx - 22, cy - 26)
+            pip(cx + 22, cy - 26)
+            pip(cx - 22, cy)
+            pip(cx + 22, cy)
+            pip(cx - 22, cy + 26)
+            pip(cx + 22, cy + 26)
+            pip(cx, cy)
+        elif rank == '10':
+            pip(cx - 22, cy - 30)
+            pip(cx + 22, cy - 30)
+            pip(cx - 22, cy - 4)
+            pip(cx + 22, cy - 4)
+            pip(cx - 22, cy + 22)
+            pip(cx + 22, cy + 22)
+            pip(cx, cy - 30)
+            pip(cx, cy - 4)
+            pip(cx, cy + 22)
+        elif rank in ('J', 'Q', 'K'):
+            pass
+        else:
+            pass
+
+    def _draw_crown(self, x, y, card):
+        color = RED if card.is_red else BLACK
+        cx = x + CARD_WIDTH // 2 + 8
+        cy = y + CARD_HEIGHT // 2 + 6
+        base_w = 22
+        base_h = 10
+        crown_pts = [
+            (cx - base_w // 2, cy + base_h // 2),
+            (cx - base_w // 2, cy - base_h // 4),
+            (cx - base_w // 4, cy - base_h // 2),
+            (cx, cy - base_h // 4),
+            (cx + base_w // 4, cy - base_h // 2),
+            (cx + base_w // 2, cy - base_h // 4),
+            (cx + base_w // 2, cy + base_h // 2),
+        ]
+        crown_fill = (220, 170, 30) if card.is_red else (80, 80, 80)
+        pygame.draw.polygon(self.screen, crown_fill, crown_pts)
+        pygame.draw.polygon(self.screen, (255, 220, 80), crown_pts, 1)
+        if card.rank == 'K':
+            if not card.is_red:
+                k_surf = self.small_font.render("0", True, (180, 180, 180))
+                k_rect = k_surf.get_rect(center=(cx, cy + base_h + 5))
+                self.screen.blit(k_surf, k_rect)
+            else:
+                k_surf = self.small_font.render("13", True, (150, 20, 20))
+                k_rect = k_surf.get_rect(center=(cx, cy + base_h + 5))
+                self.screen.blit(k_surf, k_rect)
+
     def draw_card_back(self, x, y, has_known_marker=False):
         rect = pygame.Rect(x, y, CARD_WIDTH, CARD_HEIGHT)
         self._draw_shadow(x, y)
+
+        gradient_surf = pygame.Surface((CARD_WIDTH, CARD_HEIGHT), pygame.SRCALPHA)
+        for i in range(CARD_WIDTH):
+            t = i / CARD_WIDTH
+            alpha = int(20 + 25 * t)
+            pygame.draw.line(gradient_surf, (20, 45, 95, alpha), (i, 0), (i, CARD_HEIGHT))
+        self.screen.blit(gradient_surf, (x, y))
+
         self._draw_rounded_rect(self.screen, CARD_BACK_BLUE, rect, CORNER_RADIUS)
+
         inner = pygame.Rect(x + 6, y + 6, CARD_WIDTH - 12, CARD_HEIGHT - 12)
         pygame.draw.rect(self.screen, CARD_BACK_PATTERN, inner, border_radius=CORNER_RADIUS - 2)
+
+        self._draw_card_back_crosshatch(x, y)
+
         dcx = x + CARD_WIDTH // 2
         dcy = y + CARD_HEIGHT // 2
-        pts = [(dcx, dcy - 18), (dcx + 12, dcy), (dcx, dcy + 18), (dcx - 12, dcy)]
-        pygame.draw.polygon(self.screen, (80, 120, 190), pts)
-        pygame.draw.polygon(self.screen, TEXT_WHITE, pts, 1)
+
+        outer_ring_pts = [
+            (dcx, dcy - 30), (dcx + 10, dcy - 28), (dcx + 18, dcy - 20),
+            (dcx + 20, dcy - 10), (dcx + 22, dcy), (dcx + 20, dcy + 10),
+            (dcx + 18, dcy + 20), (dcx + 10, dcy + 28), (dcx, dcy + 30),
+            (dcx - 10, dcy + 28), (dcx - 18, dcy + 20), (dcx - 20, dcy + 10),
+            (dcx - 22, dcy), (dcx - 20, dcy - 10), (dcx - 18, dcy - 20),
+            (dcx - 10, dcy - 28),
+        ]
+        pygame.draw.polygon(self.screen, (50, 90, 170), outer_ring_pts)
+        pygame.draw.polygon(self.screen, (200, 220, 255), outer_ring_pts, 1)
+
+        inner_diamond = [(dcx, dcy - 14), (dcx + 14, dcy), (dcx, dcy + 14), (dcx - 14, dcy)]
+        pygame.draw.polygon(self.screen, (80, 120, 190), inner_diamond)
+        pygame.draw.polygon(self.screen, (200, 220, 255), inner_diamond, 1)
+
+        center_dot = pygame.Rect(dcx - 3, dcy - 3, 6, 6)
+        pygame.draw.rect(self.screen, (220, 235, 255), center_dot, border_radius=2)
+
         pygame.draw.rect(self.screen, TEXT_WHITE, rect, 1, border_radius=CORNER_RADIUS)
+
         if has_known_marker:
-            tri_size = 10
-            tri_pts = [
-                (x + CARD_WIDTH - 2, y + 2),
-                (x + CARD_WIDTH - 2, y + 2 + tri_size),
-                (x + CARD_WIDTH - 2 - tri_size, y + 2),
-            ]
-            pygame.draw.polygon(self.screen, GOLD, tri_pts)
+            badge_x = x + CARD_WIDTH - 16
+            badge_y = y + 4
+            pygame.draw.circle(self.screen, GOLD, (badge_x, badge_y + 5), 6)
+            pygame.draw.circle(self.screen, (255, 230, 80), (badge_x, badge_y + 5), 4)
+            tri_pts = [(badge_x - 3, badge_y + 8), (badge_x + 3, badge_y + 8), (badge_x, badge_y + 13)]
+            pygame.draw.polygon(self.screen, (200, 160, 0), tri_pts)
         return rect
+
+    def _draw_card_back_crosshatch(self, x, y):
+        inner_x = x + 10
+        inner_y = y + 10
+        inner_w = CARD_WIDTH - 20
+        inner_h = CARD_HEIGHT - 20
+        line_color = (50, 90, 170, 40)
+        spacing = 12
+        surface = pygame.Surface((inner_w, inner_h), pygame.SRCALPHA)
+        for i in range(-inner_h, inner_w, spacing):
+            pts = []
+            for j in range(0, inner_w + inner_h, 4):
+                px = i + j
+                py = j
+                if 0 <= px < inner_w and 0 <= py < inner_h:
+                    pass
+                px2 = i + j
+                py2 = -j + inner_h if (i + j) >= inner_h else inner_h
+                if 0 <= px2 < inner_w and 0 <= py2 < inner_h:
+                    pass
+        cross_surf = pygame.Surface((inner_w, inner_h), pygame.SRCALPHA)
+        step = spacing
+        for i in range(0, max(inner_w, inner_h), step):
+            if i < inner_w:
+                pygame.draw.line(cross_surf, line_color, (i, 0), (i, inner_h))
+            if i < inner_h:
+                pygame.draw.line(cross_surf, line_color, (0, i), (inner_w, i))
+        self.screen.blit(cross_surf, (inner_x, inner_y))
 
     def draw_empty_slot(self, x, y):
         rect = pygame.Rect(x, y, CARD_WIDTH, CARD_HEIGHT)
@@ -199,9 +408,41 @@ class Renderer:
                 shadow_rect = pygame.Rect(dx - i * 2, dy - i * 2, CARD_WIDTH, CARD_HEIGHT)
                 pygame.draw.rect(self.screen, (20, 45, 95), shadow_rect, border_radius=CORNER_RADIUS)
             top_rect = pygame.Rect(dx, dy, CARD_WIDTH, CARD_HEIGHT)
+            gradient_surf = pygame.Surface((CARD_WIDTH, CARD_HEIGHT), pygame.SRCALPHA)
+            for i in range(CARD_WIDTH):
+                t = i / CARD_WIDTH
+                alpha = int(20 + 25 * t)
+                pygame.draw.line(gradient_surf, (20, 45, 95, alpha), (i, 0), (i, CARD_HEIGHT))
+            self.screen.blit(gradient_surf, (dx, dy))
             pygame.draw.rect(self.screen, CARD_BACK_BLUE, top_rect, border_radius=CORNER_RADIUS)
             inner = pygame.Rect(dx + 6, dy + 6, CARD_WIDTH - 12, CARD_HEIGHT - 12)
             pygame.draw.rect(self.screen, CARD_BACK_PATTERN, inner, border_radius=CORNER_RADIUS - 2)
+            inner_x, inner_y = dx + 10, dy + 10
+            inner_w, inner_h = CARD_WIDTH - 20, CARD_HEIGHT - 20
+            line_color = (50, 90, 170, 40)
+            cross_surf = pygame.Surface((inner_w, inner_h), pygame.SRCALPHA)
+            for i in range(0, max(inner_w, inner_h), 12):
+                if i < inner_w:
+                    pygame.draw.line(cross_surf, line_color, (i, 0), (i, inner_h))
+                if i < inner_h:
+                    pygame.draw.line(cross_surf, line_color, (0, i), (inner_w, i))
+            self.screen.blit(cross_surf, (inner_x, inner_y))
+            dcx = cx
+            dcy = cy
+            outer_ring_pts = [
+                (dcx, dcy - 30), (dcx + 10, dcy - 28), (dcx + 18, dcy - 20),
+                (dcx + 20, dcy - 10), (dcx + 22, dcy), (dcx + 20, dcy + 10),
+                (dcx + 18, dcy + 20), (dcx + 10, dcy + 28), (dcx, dcy + 30),
+                (dcx - 10, dcy + 28), (dcx - 18, dcy + 20), (dcx - 20, dcy + 10),
+                (dcx - 22, dcy), (dcx - 20, dcy - 10), (dcx - 18, dcy - 20),
+                (dcx - 10, dcy - 28),
+            ]
+            pygame.draw.polygon(self.screen, (50, 90, 170), outer_ring_pts)
+            pygame.draw.polygon(self.screen, (200, 220, 255), outer_ring_pts, 1)
+            inner_diamond = [(dcx, dcy - 14), (dcx + 14, dcy), (dcx, dcy + 14), (dcx - 14, dcy)]
+            pygame.draw.polygon(self.screen, (80, 120, 190), inner_diamond)
+            pygame.draw.polygon(self.screen, (200, 220, 255), inner_diamond, 1)
+            pygame.draw.circle(self.screen, (220, 235, 255), (dcx, dcy), 3)
             pygame.draw.rect(self.screen, TEXT_WHITE, top_rect, 1, border_radius=CORNER_RADIUS)
             count_surf = self.small_font.render(str(remaining), True, TEXT_WHITE)
             count_rect = count_surf.get_rect(center=(cx, cy + CARD_HEIGHT // 2 + 14))
@@ -415,19 +656,70 @@ class Renderer:
         rect = surface.get_rect()
         pygame.draw.rect(surface, CARD_WHITE, rect, border_radius=CORNER_RADIUS)
         color = RED if card.is_red else BLACK
+
+        inner_rect = pygame.Rect(4, 4, rect.width - 8, rect.height - 8)
+        pygame.draw.rect(surface, (225, 225, 230), inner_rect, 1, border_radius=CORNER_RADIUS - 2)
+
+        self._draw_suit_pips(0, 0, card)
+
         big_surf = self.card_big_font.render(card.rank, True, color)
-        big_rect = big_surf.get_rect(center=(rect.width // 2, rect.height // 2 - 8))
+        big_rect = big_surf.get_rect(center=(rect.width // 2 + 8, rect.height // 2 - 8))
         surface.blit(big_surf, big_rect)
         suit_surf = self.card_font.render(card.suit_symbol, True, color)
-        suit_rect = suit_surf.get_rect(center=(rect.width // 2, rect.height // 2 + 16))
+        suit_rect = suit_surf.get_rect(center=(rect.width // 2 + 8, rect.height // 2 + 16))
         surface.blit(suit_surf, suit_rect)
+
+        if card.rank in ('J', 'Q', 'K'):
+            self._draw_crown(0, 0, card)
+
+        corner_text = f"{card.rank}{card.suit_symbol}"
+        badge_rect = pygame.Rect(2, 1, 32, 18)
+        pygame.draw.rect(surface, (240, 240, 245), badge_rect, border_radius=3)
+        tl_surf = self.small_font.render(corner_text, True, color)
+        surface.blit(tl_surf, (5, 4))
+        br_surf = self.small_font.render(corner_text, True, color)
+        br_rect = br_surf.get_rect(bottomright=(rect.width - 5, rect.height - 4))
+        surface.blit(br_surf, br_rect)
+
         pygame.draw.rect(surface, (180, 180, 180), rect, 1, border_radius=CORNER_RADIUS)
 
     def _render_card_back_on_surface(self, surface):
         rect = surface.get_rect()
+        gradient_surf = pygame.Surface((CARD_WIDTH, CARD_HEIGHT), pygame.SRCALPHA)
+        for i in range(CARD_WIDTH):
+            t = i / CARD_WIDTH
+            alpha = int(20 + 25 * t)
+            pygame.draw.line(gradient_surf, (20, 45, 95, alpha), (i, 0), (i, CARD_HEIGHT))
+        surface.blit(gradient_surf, (0, 0))
         pygame.draw.rect(surface, CARD_BACK_BLUE, rect, border_radius=CORNER_RADIUS)
         inner = pygame.Rect(6, 6, rect.width - 12, rect.height - 12)
         pygame.draw.rect(surface, CARD_BACK_PATTERN, inner, border_radius=CORNER_RADIUS - 2)
+        inner_x, inner_y = 10, 10
+        inner_w, inner_h = CARD_WIDTH - 20, CARD_HEIGHT - 20
+        line_color = (50, 90, 170, 40)
+        cross_surf = pygame.Surface((inner_w, inner_h), pygame.SRCALPHA)
+        for i in range(0, max(inner_w, inner_h), 12):
+            if i < inner_w:
+                pygame.draw.line(cross_surf, line_color, (i, 0), (i, inner_h))
+            if i < inner_h:
+                pygame.draw.line(cross_surf, line_color, (0, i), (inner_w, i))
+        surface.blit(cross_surf, (inner_x, inner_y))
+        dcx = rect.width // 2
+        dcy = rect.height // 2
+        outer_ring_pts = [
+            (dcx, dcy - 30), (dcx + 10, dcy - 28), (dcx + 18, dcy - 20),
+            (dcx + 20, dcy - 10), (dcx + 22, dcy), (dcx + 20, dcy + 10),
+            (dcx + 18, dcy + 20), (dcx + 10, dcy + 28), (dcx, dcy + 30),
+            (dcx - 10, dcy + 28), (dcx - 18, dcy + 20), (dcx - 20, dcy + 10),
+            (dcx - 22, dcy), (dcx - 20, dcy - 10), (dcx - 18, dcy - 20),
+            (dcx - 10, dcy - 28),
+        ]
+        pygame.draw.polygon(surface, (50, 90, 170), outer_ring_pts)
+        pygame.draw.polygon(surface, (200, 220, 255), outer_ring_pts, 1)
+        inner_diamond = [(dcx, dcy - 14), (dcx + 14, dcy), (dcx, dcy + 14), (dcx - 14, dcy)]
+        pygame.draw.polygon(surface, (80, 120, 190), inner_diamond)
+        pygame.draw.polygon(surface, (200, 220, 255), inner_diamond, 1)
+        pygame.draw.circle(surface, (220, 235, 255), (dcx, dcy), 3)
         pygame.draw.rect(surface, TEXT_WHITE, rect, 1, border_radius=CORNER_RADIUS)
 
     def draw_drawn_card(self, card):
@@ -438,12 +730,6 @@ class Renderer:
         label_rect = label_surf.get_rect(center=(cx, dy - 12))
         self.screen.blit(label_surf, label_rect)
         rect = self.draw_card_face(dx, dy, card, show_power_label=True)
-        if card.power is not None:
-            power_color = POWER_COLORS.get(card.power, TEXT_WHITE)
-            power_label = POWER_LABELS.get(card.power, card.power)
-            p_surf = self.small_font.render(power_label, True, power_color)
-            p_rect = p_surf.get_rect(center=(cx, dy + CARD_HEIGHT + 12))
-            self.screen.blit(p_surf, p_rect)
         return rect
 
     def draw_peek_reveal(self):
@@ -489,8 +775,31 @@ class Renderer:
     def draw_action_buttons(self, action_buttons):
         for name, btn in action_buttons.items():
             rect = btn['rect']
-            color = btn.get('hover_color', btn['color']) if rect.collidepoint(pygame.mouse.get_pos()) else btn['color']
+            hovered = rect.collidepoint(pygame.mouse.get_pos())
+            color = btn.get('hover_color', btn['color']) if hovered else btn['color']
+
+            shadow_surf = pygame.Surface((rect.width + 4, rect.height + 4), pygame.SRCALPHA)
+            pygame.draw.rect(shadow_surf, (0, 0, 0, 60), (2, 3, rect.width, rect.height), border_radius=8)
+            self.screen.blit(shadow_surf, (rect.x - 2, rect.y + 2))
+
             self._draw_rounded_rect(self.screen, color, rect, 8)
+
+            c_r = max(color[0] - 30, 0)
+            c_g = max(color[1] - 30, 0)
+            c_b = max(color[2] - 30, 0)
+            pygame.draw.line(self.screen, (c_r, c_g, c_b),
+                            (rect.left + 3, rect.bottom - 3), (rect.right - 3, rect.bottom - 3), 2)
+            pygame.draw.line(self.screen, (c_r, c_g, c_b),
+                            (rect.right - 3, rect.top + 3), (rect.right - 3, rect.bottom - 3), 2)
+
+            l_r = min(color[0] + 40, 255)
+            l_g = min(color[1] + 40, 255)
+            l_b = min(color[2] + 40, 255)
+            pygame.draw.line(self.screen, (l_r, l_g, l_b),
+                            (rect.left + 3, rect.top + 3), (rect.right - 3, rect.top + 3), 2)
+            pygame.draw.line(self.screen, (l_r, l_g, l_b),
+                            (rect.left + 3, rect.top + 3), (rect.left + 3, rect.bottom - 3), 2)
+
             pygame.draw.rect(self.screen, TEXT_WHITE, rect, 1, border_radius=8)
             text_surf = self.ui_font.render(btn['text'], True, TEXT_WHITE)
             text_rect = text_surf.get_rect(center=rect.center)
@@ -500,6 +809,28 @@ class Renderer:
         rect = cancel_button['rect']
         hovered = rect.collidepoint(mouse_pos)
         color = CANCEL_GRAY_HOVER if hovered else CANCEL_GRAY
+
+        shadow_surf = pygame.Surface((rect.width + 4, rect.height + 4), pygame.SRCALPHA)
+        pygame.draw.rect(shadow_surf, (0, 0, 0, 60), (2, 3, rect.width, rect.height), border_radius=8)
+        self.screen.blit(shadow_surf, (rect.x - 2, rect.y + 2))
+
+        self._draw_rounded_rect(self.screen, color, rect, 8)
+
+        c_r = max(color[0] - 30, 0)
+        c_g = max(color[1] - 30, 0)
+        c_b = max(color[2] - 30, 0)
+        pygame.draw.line(self.screen, (c_r, c_g, c_b),
+                        (rect.left + 3, rect.bottom - 3), (rect.right - 3, rect.bottom - 3), 2)
+        pygame.draw.line(self.screen, (c_r, c_g, c_b),
+                        (rect.right - 3, rect.top + 3), (rect.right - 3, rect.bottom - 3), 2)
+
+        l_r = min(color[0] + 40, 255)
+        l_g = min(color[1] + 40, 255)
+        l_b = min(color[2] + 40, 255)
+        pygame.draw.line(self.screen, (l_r, l_g, l_b),
+                        (rect.left + 3, rect.top + 3), (rect.right - 3, rect.top + 3), 2)
+        pygame.draw.line(self.screen, (l_r, l_g, l_b),
+                        (rect.left + 3, rect.top + 3), (rect.left + 3, rect.bottom - 3), 2)
         self._draw_rounded_rect(self.screen, color, rect, 8)
         pygame.draw.rect(self.screen, TEXT_WHITE, rect, 1, border_radius=8)
         text_surf = self.ui_font.render(cancel_button.get('text', 'Cancel'), True, TEXT_WHITE)
@@ -810,7 +1141,7 @@ class Renderer:
             start_pos=(0, 0),
             end_pos=(0, 0),
             duration=self.effective_anim_duration(ANIM_FLASH_DURATION),
-            text_color=DECLARE_RED,
+            text_color=GOLD,
         )
         self.animation_queue.add(flash)
         self.animation_queue.add(notif)
@@ -882,10 +1213,12 @@ class Renderer:
                 drawing = not drawing
 
     def _draw_shadow(self, x, y):
-        shadow_rect = pygame.Rect(x + 2, y + 2, CARD_WIDTH, CARD_HEIGHT)
-        shadow_surf = pygame.Surface((CARD_WIDTH, CARD_HEIGHT), pygame.SRCALPHA)
-        shadow_surf.fill((*CARD_SHADOW, 80))
-        self.screen.blit(shadow_surf, (x + 2, y + 2))
+        shadow_surf = pygame.Surface((CARD_WIDTH + 8, CARD_HEIGHT + 8), pygame.SRCALPHA)
+        pygame.draw.rect(shadow_surf, (0, 0, 0, 20), (6, 8, CARD_WIDTH, CARD_HEIGHT), border_radius=CORNER_RADIUS)
+        pygame.draw.rect(shadow_surf, (0, 0, 0, 35), (4, 5, CARD_WIDTH, CARD_HEIGHT), border_radius=CORNER_RADIUS)
+        pygame.draw.rect(shadow_surf, (0, 0, 0, 50), (2, 3, CARD_WIDTH, CARD_HEIGHT), border_radius=CORNER_RADIUS)
+        pygame.draw.rect(shadow_surf, (0, 0, 0, 70), (0, 0, CARD_WIDTH, CARD_HEIGHT), border_radius=CORNER_RADIUS)
+        self.screen.blit(shadow_surf, (x - 4, y - 2))
 
     def draw_gear_icon(self, mouse_pos, settings_open=False):
         rect = pygame.Rect(SCREEN_WIDTH - 52, 8, 40, 34)

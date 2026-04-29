@@ -248,118 +248,126 @@ class SettingsMenu:
         self.screen.blit(overlay, (0, 0))
 
         panel_rect = pygame.Rect(self.PANEL_X, self.PANEL_Y, self.PANEL_W, self.PANEL_H)
+
+        panel_shadow = pygame.Surface((self.PANEL_W + 8, self.PANEL_H + 8), pygame.SRCALPHA)
+        pygame.draw.rect(panel_shadow, (0, 0, 0, 100), (4, 6, self.PANEL_W, self.PANEL_H), border_radius=12)
+        self.screen.blit(panel_shadow, (self.PANEL_X - 4, self.PANEL_Y + 4))
+
         panel_surf = pygame.Surface((self.PANEL_W, self.PANEL_H), pygame.SRCALPHA)
-        panel_surf.fill((*PANEL_BG, 245))
+        panel_surf.fill((*PANEL_BG, 248))
         self.screen.blit(panel_surf, panel_rect.topleft)
         pygame.draw.rect(self.screen, GOLD, panel_rect, 2, border_radius=10)
 
         title_surf = self.title_font.render("Settings", True, GOLD)
-        title_rect = title_surf.get_rect(center=(self.PANEL_X + self.PANEL_W // 2, self.PANEL_Y + 32))
-        self.screen.blit(title_surf, title_rect)
+        shadow_surf = self.title_font.render("Settings", True, (0, 0, 0))
+        title_rect = title_surf.get_rect(center=(self.PANEL_X + self.PANEL_W // 2 + 1, self.PANEL_Y + 33))
+        self.screen.blit(shadow_surf, title_rect)
+        title_rect2 = title_surf.get_rect(center=(self.PANEL_X + self.PANEL_W // 2, self.PANEL_Y + 32))
+        self.screen.blit(title_surf, title_rect2)
 
-        self._draw_rounded_rect(self.screen, (0, 0, 0, 0), pygame.Rect(0, 0, 0, 0), 0)
+        SECTION_ICONS = {
+            'CARD LAYOUT': '\u25a6',
+            'GAME SPEED': '\u231a',
+            'AI DIFFICULTY': '\u2699',
+            'DISPLAY': '\u25ce',
+            'GAMEPLAY': '\u2694',
+        }
 
         for ctrl in self._controls:
             rect = ctrl['rect']
             ctype = ctrl['type']
 
             if ctype == 'section':
-                sec_surf = self.section_font.render(ctrl['text'], True, GOLD)
-                self.screen.blit(sec_surf, (rect.x, rect.y))
-                pygame.draw.line(self.screen, PANEL_BORDER, (rect.x, rect.y + 18), (self.PANEL_X + self.PANEL_W - 20, rect.y + 18), 1)
+                icon = SECTION_ICONS.get(ctrl['text'], '')
+                icon_surf = self.section_font.render(icon, True, GOLD)
+                self.screen.blit(icon_surf, (rect.x, rect.y))
+                text_surf = self.section_font.render(ctrl['text'], True, GOLD)
+                self.screen.blit(text_surf, (rect.x + 18, rect.y))
+                pygame.draw.line(self.screen, PANEL_BORDER, (rect.x, rect.y + 18),
+                                (self.PANEL_X + self.PANEL_W - 20, rect.y + 18), 1)
 
             elif ctype == 'label':
                 lbl_surf = self.small_font.render(ctrl['text'], True, TEXT_DIM)
                 self.screen.blit(lbl_surf, (rect.x, rect.y))
 
-            elif ctype == 'layout_btn':
-                active = (game_settings.layout_mode == ctrl['value'])
-                hovered = (self._hovered is ctrl)
-                color = GOLD if active else ((100, 100, 100) if hovered else (60, 60, 60))
-                txt_color = BG_DARK if active else (TEXT_WHITE if hovered else TEXT_DIM)
-                self._draw_rounded_rect(self.screen, color, rect, 5)
-                lbl_surf = self.small_font.render(ctrl['label'], True, txt_color)
-                lbl_rect = lbl_surf.get_rect(center=rect.center)
-                self.screen.blit(lbl_surf, lbl_rect)
+            elif ctype in ('layout_btn', 'ai_delay_btn', 'peek_reveal_btn', 'anim_btn',
+                          'ai_diff_btn', 'score_btn', 'marker_btn', 'log_btn',
+                          'confirm_btn', 'peek_phase_btn'):
+                active = False
+                if ctype == 'layout_btn':
+                    active = (game_settings.layout_mode == ctrl['value'])
+                elif ctype == 'ai_delay_btn':
+                    active = abs(game_settings.ai_delay - ctrl['value']) < 0.05
+                elif ctype == 'peek_reveal_btn':
+                    active = abs(game_settings.peek_reveal_time - ctrl['value']) < 0.05
+                elif ctype == 'anim_btn':
+                    active = (game_settings.animations_enabled == ctrl['value'])
+                elif ctype == 'ai_diff_btn':
+                    if game_manager:
+                        diff_val = game_settings.ai_difficulties.get(
+                            game_manager.players[0].seat_index if game_manager.players else 0, 'medium')
+                        active = (diff_val == ctrl['value'])
+                elif ctype in ('score_btn', 'marker_btn', 'log_btn', 'confirm_btn'):
+                    attr_map = {'score_btn': 'show_own_score', 'marker_btn': 'show_known_marker',
+                                'log_btn': 'show_game_log', 'confirm_btn': 'confirm_declare'}
+                    active = (getattr(game_settings, attr_map.get(ctype, ''), False) == ctrl['value'])
+                elif ctype == 'peek_phase_btn':
+                    active = abs(game_settings.peek_phase_seconds - ctrl['value']) < 0.05
 
-            elif ctype == 'ai_delay_btn':
-                active = abs(game_settings.ai_delay - ctrl['value']) < 0.05
                 hovered = (self._hovered is ctrl)
-                color = GOLD if active else ((100, 100, 100) if hovered else (60, 60, 60))
+                base_color = GOLD if active else ((120, 120, 120) if hovered else (70, 70, 70))
                 txt_color = BG_DARK if active else (TEXT_WHITE if hovered else TEXT_DIM)
-                self._draw_rounded_rect(self.screen, color, rect, 5)
-                lbl_surf = self.small_font.render(ctrl['label'], True, txt_color)
-                lbl_rect = lbl_surf.get_rect(center=rect.center)
-                self.screen.blit(lbl_surf, lbl_rect)
 
-            elif ctype == 'peek_reveal_btn':
-                active = abs(game_settings.peek_reveal_time - ctrl['value']) < 0.05
-                hovered = (self._hovered is ctrl)
-                color = GOLD if active else ((100, 100, 100) if hovered else (60, 60, 60))
-                txt_color = BG_DARK if active else (TEXT_WHITE if hovered else TEXT_DIM)
-                self._draw_rounded_rect(self.screen, color, rect, 5)
-                lbl_surf = self.small_font.render(ctrl['label'], True, txt_color)
-                lbl_rect = lbl_surf.get_rect(center=rect.center)
-                self.screen.blit(lbl_surf, lbl_rect)
+                shadow_s = pygame.Surface((rect.width + 3, rect.height + 3), pygame.SRCALPHA)
+                pygame.draw.rect(shadow_s, (0, 0, 0, 50), (1, 2, rect.width, rect.height), border_radius=5)
+                self.screen.blit(shadow_s, (rect.x - 1, rect.y + 2))
 
-            elif ctype == 'anim_btn':
-                active = (game_settings.animations_enabled == ctrl['value'])
-                hovered = (self._hovered is ctrl)
-                color = GOLD if active else ((100, 100, 100) if hovered else (60, 60, 60))
-                txt_color = BG_DARK if active else (TEXT_WHITE if hovered else TEXT_DIM)
-                self._draw_rounded_rect(self.screen, color, rect, 5)
-                lbl_surf = self.small_font.render(ctrl['label'], True, txt_color)
-                lbl_rect = lbl_surf.get_rect(center=rect.center)
-                self.screen.blit(lbl_surf, lbl_rect)
+                self._draw_rounded_rect(self.screen, base_color, rect, 5)
 
-            elif ctype == 'ai_diff_btn':
-                if game_manager:
-                    diff_val = game_settings.ai_difficulties.get(
-                        game_manager.players[0].seat_index if game_manager.players else 0,
-                        'medium'
-                    )
-                    active = (diff_val == ctrl['value'])
-                else:
-                    active = False
-                hovered = (self._hovered is ctrl)
-                color = GOLD if active else ((100, 100, 100) if hovered else (60, 60, 60))
-                txt_color = BG_DARK if active else (TEXT_WHITE if hovered else TEXT_DIM)
-                self._draw_rounded_rect(self.screen, color, rect, 5)
-                lbl_surf = self.small_font.render(ctrl['label'], True, txt_color)
-                lbl_rect = lbl_surf.get_rect(center=rect.center)
-                self.screen.blit(lbl_surf, lbl_rect)
+                c_r = max(base_color[0] - 35, 0)
+                c_g = max(base_color[1] - 35, 0)
+                c_b = max(base_color[2] - 35, 0)
+                pygame.draw.line(self.screen, (c_r, c_g, c_b),
+                                (rect.left + 2, rect.bottom - 2), (rect.right - 2, rect.bottom - 2), 2)
+                pygame.draw.line(self.screen, (c_r, c_g, c_b),
+                                (rect.right - 2, rect.top + 2), (rect.right - 2, rect.bottom - 2), 2)
+                l_r = min(base_color[0] + 45, 255)
+                l_g = min(base_color[1] + 45, 255)
+                l_b = min(base_color[2] + 45, 255)
+                pygame.draw.line(self.screen, (l_r, l_g, l_b),
+                                (rect.left + 2, rect.top + 2), (rect.right - 2, rect.top + 2), 2)
+                pygame.draw.line(self.screen, (l_r, l_g, l_b),
+                                (rect.left + 2, rect.top + 2), (rect.left + 2, rect.bottom - 2), 2)
 
-            elif ctype in ('score_btn', 'marker_btn', 'log_btn', 'confirm_btn'):
-                attr_map = {
-                    'score_btn': 'show_own_score',
-                    'marker_btn': 'show_known_marker',
-                    'log_btn': 'show_game_log',
-                    'confirm_btn': 'confirm_declare',
-                }
-                attr = attr_map.get(ctype, '')
-                active = (getattr(game_settings, attr, False) == ctrl['value'])
-                hovered = (self._hovered is ctrl)
-                color = GOLD if active else ((100, 100, 100) if hovered else (60, 60, 60))
-                txt_color = BG_DARK if active else (TEXT_WHITE if hovered else TEXT_DIM)
-                self._draw_rounded_rect(self.screen, color, rect, 5)
-                lbl_surf = self.small_font.render(ctrl['label'], True, txt_color)
-                lbl_rect = lbl_surf.get_rect(center=rect.center)
-                self.screen.blit(lbl_surf, lbl_rect)
-
-            elif ctype == 'peek_phase_btn':
-                active = abs(game_settings.peek_phase_seconds - ctrl['value']) < 0.05
-                hovered = (self._hovered is ctrl)
-                color = GOLD if active else ((100, 100, 100) if hovered else (60, 60, 60))
-                txt_color = BG_DARK if active else (TEXT_WHITE if hovered else TEXT_DIM)
-                self._draw_rounded_rect(self.screen, color, rect, 5)
                 lbl_surf = self.small_font.render(ctrl['label'], True, txt_color)
                 lbl_rect = lbl_surf.get_rect(center=rect.center)
                 self.screen.blit(lbl_surf, lbl_rect)
 
             elif ctype == 'done_btn':
                 hovered = rect.collidepoint(mouse_pos)
-                color = (40, 140, 160) if hovered else (60, 170, 190)
+                color = (80, 200, 210) if hovered else (60, 170, 190)
+
+                shadow_s = pygame.Surface((rect.width + 4, rect.height + 4), pygame.SRCALPHA)
+                pygame.draw.rect(shadow_s, (0, 0, 0, 60), (2, 3, rect.width, rect.height), border_radius=8)
+                self.screen.blit(shadow_s, (rect.x - 2, rect.y + 3))
+
                 self._draw_rounded_rect(self.screen, color, rect, 8)
+
+                c_r = max(color[0] - 35, 0)
+                c_g = max(color[1] - 35, 0)
+                c_b = max(color[2] - 35, 0)
+                pygame.draw.line(self.screen, (c_r, c_g, c_b),
+                                (rect.left + 3, rect.bottom - 3), (rect.right - 3, rect.bottom - 3), 2)
+                pygame.draw.line(self.screen, (c_r, c_g, c_b),
+                                (rect.right - 3, rect.top + 3), (rect.right - 3, rect.bottom - 3), 2)
+                l_r = min(color[0] + 40, 255)
+                l_g = min(color[1] + 40, 255)
+                l_b = min(color[2] + 40, 255)
+                pygame.draw.line(self.screen, (l_r, l_g, l_b),
+                                (rect.left + 3, rect.top + 3), (rect.right - 3, rect.top + 3), 2)
+                pygame.draw.line(self.screen, (l_r, l_g, l_b),
+                                (rect.left + 3, rect.top + 3), (rect.left + 3, rect.bottom - 3), 2)
+
                 pygame.draw.rect(self.screen, TEXT_WHITE, rect, 1, border_radius=8)
                 done_surf = self.font.render("Done", True, TEXT_WHITE)
                 done_rect = done_surf.get_rect(center=rect.center)
