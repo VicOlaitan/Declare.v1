@@ -188,7 +188,7 @@ class SetupScreen:
 
 
 class PeekScreen:
-    def __init__(self, screen):
+    def __init__(self, screen, peek_seconds=5.0):
         self.screen = screen
         self.title_font = pygame.font.SysFont("segoeui", TITLE_FONT_SIZE, bold=True)
         self.subtitle_font = pygame.font.SysFont("segoeui", SUBTITLE_FONT_SIZE)
@@ -196,7 +196,7 @@ class PeekScreen:
         self.button_font = pygame.font.SysFont("segoeui", UI_FONT_SIZE)
         self.card_font = pygame.font.SysFont("segoeui", CARD_FONT_SIZE, bold=True)
         self.small_font = pygame.font.SysFont("segoeui", SMALL_FONT_SIZE)
-        self.max_time = 5.0
+        self.max_time = peek_seconds
         self.elapsed = 0.0
         self.revealed = True
         self.done_button = Button(SCREEN_WIDTH // 2, 500, 300, 54, "I've memorized them!", SWAP_GREEN, SWAP_GREEN_HOVER)

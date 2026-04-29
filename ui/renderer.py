@@ -13,14 +13,31 @@ from config import (SCREEN_WIDTH, SCREEN_HEIGHT, BG_GREEN, BG_DARK, CARD_WHITE, 
     LOG_PANEL_X, LOG_PANEL_Y, LOG_PANEL_W, LOG_PANEL_H,
     CARD_FONT_SIZE, CARD_BIG_FONT_SIZE, TITLE_FONT_SIZE, SUBTITLE_FONT_SIZE,
     UI_FONT_SIZE, LOG_FONT_SIZE, SMALL_FONT_SIZE,
-    POWER_LABELS, POWER_COLORS, HAND_SIZE)
+    POWER_LABELS, POWER_COLORS, HAND_SIZE,
+    CARD_GRID_SPACING_X, CARD_GRID_SPACING_Y, PLAYER_AREA_PADDING,
+    ANIM_DRAW_DURATION, ANIM_SWAP_DURATION, ANIM_UNSEEN_SWAP_DURATION,
+    ANIM_SEEN_SWAP_DURATION, ANIM_PEEK_LIFT_DURATION, ANIM_PAIR_FLY_DURATION,
+    ANIM_DISCARD_DURATION, ANIM_NOTIFICATION_DURATION, ANIM_FLASH_DURATION,
+    PLAYER_AREA_2, PLAYER_AREA_3, PLAYER_AREA_4)
 from game.card import Card
 from game.player import Player
 from game.game_manager import GameManager, GameState
+from ui.animations import (VisualEvent, VisualEventType, AnimationQueue,
+    ease_out_cubic, ease_out_back)
 
 SEAT_POSITIONS_2 = {0: PLAYER_BOTTOM, 1: PLAYER_TOP}
-SEAT_POSITIONS_3 = {0: PLAYER_BOTTOM, 1: (380, 170), 2: (900, 170)}
+SEAT_POSITIONS_3 = {0: PLAYER_BOTTOM, 1: (420, 200), 2: (1180, 200)}
 SEAT_POSITIONS_4 = {0: PLAYER_BOTTOM, 1: PLAYER_LEFT, 2: PLAYER_TOP, 3: PLAYER_RIGHT}
+
+
+def _player_area_bounds(seat_index, num_players):
+    if num_players == 2:
+        return PLAYER_AREA_2.get(seat_index, PLAYER_AREA_2[0])
+    elif num_players == 3:
+        return PLAYER_AREA_3.get(seat_index, PLAYER_AREA_3[0])
+    else:
+        return PLAYER_AREA_4.get(seat_index, PLAYER_AREA_4[0])
+
 
 STATE_LABELS = {
     GameState.MENU: "Menu",
@@ -35,6 +52,9 @@ STATE_LABELS = {
     GameState.RESOLVE_DECLARE: "Resolve Declare",
     GameState.GAME_OVER: "Game Over",
 }
+
+LAYOUT_ICONS = {'line': '\u2500\u2500\u2500', 'square': '\u2588\u2588', 'free': '\u2726'}
+LAYOUT_NAMES = ['line', 'square', 'free']
 
 
 def _get_seat_position(seat_index, num_players):
@@ -60,8 +80,13 @@ class Renderer:
         self.hovered_button = None
         self.peek_reveal = None
         self._pulse_time = 0.0
+        self.animation_queue = AnimationQueue()
+        self.dragging_card = None
+        self.drag_pos = None
+        self.game_settings = None
 
-    def draw(self, game_manager, mouse_pos=(0, 0), action_buttons=None, cancel_button=None, status_message="", awaiting_target=None):
+    def draw(self, game_manager, mouse_pos=(0, 0), action_buttons=None,
+             cancel_button=None, status_message="", awaiting_target=None):
         self.screen.fill(BG_GREEN)
         self._draw_table_felt()
         self._draw_status_bar(game_manager)
@@ -83,10 +108,11 @@ class Renderer:
             self._draw_cancel_button(cancel_button, mouse_pos)
         if status_message:
             self.draw_status_message(status_message)
+        self.animation_queue.draw(self.screen, self)
 
     def _draw_table_felt(self):
         center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
-        rx, ry = 480, 260
+        rx, ry = 620, 340
         felt_surf = pygame.Surface((rx * 2, ry * 2), pygame.SRCALPHA)
         pygame.draw.ellipse(felt_surf, (30, 95, 50, 80), (0, 0, rx * 2, ry * 2))
         self.screen.blit(felt_surf, (center[0] - rx, center[1] - ry))
@@ -201,14 +227,19 @@ class Renderer:
 
     def draw_player_area(self, player, position, is_current, is_human, game_manager, mouse_pos):
         px, py = position
+        layout = getattr(player, 'layout_mode', 'line')
         num_players = len(game_manager.players)
-        total_width = HAND_SIZE * CARD_SPREAD + (CARD_WIDTH - CARD_SPREAD)
-        start_x = px - total_width // 2
-        start_y = py - CARD_HEIGHT // 2 + 4
+        card_positions = self._compute_card_positions(player, position, game_manager)
+
+        if layout == 'free':
+            bounds = _player_area_bounds(player.seat_index, num_players)
+            self._draw_area_outline(bounds)
+
         name_color = GOLD if is_current else TEXT_WHITE
-        name_y = start_y - 28
+        name_y = card_positions[0][1] - 28 if card_positions else py - 50
         name_surf = self.ui_font.render(player.name, True, name_color)
-        name_rect = name_surf.get_rect(center=(px, name_y + name_surf.get_height() // 2))
+        name_rect_center = (px, name_y + name_surf.get_height() // 2)
+        name_rect = name_surf.get_rect(center=name_rect_center)
         self.screen.blit(name_surf, name_rect)
         if is_current:
             alpha = int(80 + 40 * math.sin(self._pulse_time * 3))
@@ -229,14 +260,20 @@ class Renderer:
             arrow_surf = self.small_font.render("\u25b6 YOUR TURN", True, GOLD)
             arrow_rect = arrow_surf.get_rect(center=(px, info_y + info_surf.get_height() + 12))
             self.screen.blit(arrow_surf, arrow_rect)
-        card_rects = []
+
+        if is_human and is_current:
+            pass
+
         for slot_index in range(HAND_SIZE):
             card = player.hand[slot_index]
-            cx = start_x + slot_index * CARD_SPREAD
-            cy = start_y
-            slot_rect = pygame.Rect(cx, cy, CARD_WIDTH, CARD_HEIGHT)
-            hovered = (mouse_pos[0] >= slot_rect.left and mouse_pos[0] <= slot_rect.right
-                       and mouse_pos[1] >= slot_rect.top and mouse_pos[1] <= slot_rect.bottom)
+            if slot_index < len(card_positions):
+                cx, cy = card_positions[slot_index]
+            else:
+                cx, cy = 0, 0
+
+            if self.dragging_card is not None and self.dragging_card == slot_index and is_human:
+                continue
+
             if card is None:
                 self.draw_empty_slot(cx, cy)
             elif is_human:
@@ -244,8 +281,154 @@ class Renderer:
                 self.draw_card_back(cx, cy, has_known_marker=has_marker)
             else:
                 self.draw_card_back(cx, cy, has_known_marker=False)
-            card_rects.append((slot_rect, slot_index))
-        return card_rects
+
+        if self.dragging_card is not None and is_human and self.drag_pos is not None:
+            slot_index = self.dragging_card
+            card = player.hand[slot_index]
+            if card is not None:
+                dx, dy = self.drag_pos
+                drag_surf = pygame.Surface((CARD_WIDTH, CARD_HEIGHT), pygame.SRCALPHA)
+                if slot_index in player.known_cards:
+                    self._render_card_face_on_surface(drag_surf, card)
+                else:
+                    self._render_card_back_on_surface(drag_surf)
+                drag_surf.set_alpha(200)
+                self.screen.blit(drag_surf, (dx - CARD_WIDTH // 2, dy - CARD_HEIGHT // 2))
+
+    def _draw_area_outline(self, bounds):
+        x_min, y_min, x_max, y_max = bounds
+        outline_rect = pygame.Rect(x_min, y_min, x_max - x_min, y_max - y_min)
+        outline_surf = pygame.Surface((outline_rect.width, outline_rect.height), pygame.SRCALPHA)
+        pygame.draw.rect(outline_surf, (255, 255, 255, 25), outline_surf.get_rect(), 2, border_radius=8)
+        self.screen.blit(outline_surf, outline_rect.topleft)
+
+    def _compute_card_positions(self, player, position, game_manager):
+        px, py = position
+        layout = getattr(player, 'layout_mode', 'line')
+        num_players = len(game_manager.players)
+        positions = []
+
+        if layout == 'line':
+            total_width = HAND_SIZE * CARD_SPREAD + (CARD_WIDTH - CARD_SPREAD)
+            start_x = px - total_width // 2
+            start_y = py - CARD_HEIGHT // 2 + 4
+            for i in range(HAND_SIZE):
+                positions.append((start_x + i * CARD_SPREAD, start_y))
+
+        elif layout == 'square':
+            grid_w = 2 * CARD_GRID_SPACING_X
+            grid_h = 2 * CARD_GRID_SPACING_Y
+            start_x = px - grid_w // 2
+            start_y = py - grid_h // 2 + 4
+            grid_positions = [
+                (start_x, start_y),
+                (start_x + CARD_GRID_SPACING_X, start_y),
+                (start_x, start_y + CARD_GRID_SPACING_Y),
+                (start_x + CARD_GRID_SPACING_X, start_y + CARD_GRID_SPACING_Y),
+            ]
+            for i in range(HAND_SIZE):
+                if i < len(grid_positions):
+                    positions.append(grid_positions[i])
+                else:
+                    positions.append((px, py))
+
+        elif layout == 'free':
+            default_positions = self._default_line_positions(px, py)
+            stored = getattr(player, 'card_positions', {})
+            for i in range(HAND_SIZE):
+                if i in stored and stored[i] is not None:
+                    positions.append(stored[i])
+                elif i < len(default_positions):
+                    positions.append(default_positions[i])
+                    if i not in stored:
+                        stored[i] = default_positions[i]
+                else:
+                    positions.append((px, py))
+            player.card_positions = stored
+
+        return positions
+
+    def _default_line_positions(self, px, py):
+        total_width = HAND_SIZE * CARD_SPREAD + (CARD_WIDTH - CARD_SPREAD)
+        start_x = px - total_width // 2
+        start_y = py - CARD_HEIGHT // 2 + 4
+        positions = []
+        for i in range(HAND_SIZE):
+            positions.append((start_x + i * CARD_SPREAD, start_y))
+        return positions
+
+    def _draw_layout_buttons(self, player, cx, y, mouse_pos):
+        layout = getattr(player, 'layout_mode', 'line')
+        btn_w = 36
+        btn_h = 22
+        spacing = 4
+        total_w = len(LAYOUT_NAMES) * btn_w + (len(LAYOUT_NAMES) - 1) * spacing
+        start_x = cx - total_w // 2
+
+        for i, mode in enumerate(LAYOUT_NAMES):
+            bx = start_x + i * (btn_w + spacing)
+            rect = pygame.Rect(bx, y, btn_w, btn_h)
+            is_active = (layout == mode)
+            is_hovered = rect.collidepoint(mouse_pos) and not is_active
+            if is_active:
+                color = GOLD
+                text_color = BG_DARK
+            elif is_hovered:
+                color = (100, 100, 100)
+                text_color = TEXT_WHITE
+            else:
+                color = (60, 60, 60)
+                text_color = TEXT_DIM
+            self._draw_rounded_rect(self.screen, color, rect, 4)
+            icon = LAYOUT_ICONS[mode]
+            icon_surf = self.small_font.render(icon, True, text_color)
+            icon_rect = icon_surf.get_rect(center=rect.center)
+            self.screen.blit(icon_surf, icon_rect)
+
+    def get_layout_button_rects(self, player, cx, y):
+        btn_w = 36
+        btn_h = 22
+        spacing = 4
+        total_w = len(LAYOUT_NAMES) * btn_w + (len(LAYOUT_NAMES) - 1) * spacing
+        start_x = cx - total_w // 2
+        rects = {}
+        for i, mode in enumerate(LAYOUT_NAMES):
+            bx = start_x + i * (btn_w + spacing)
+            rects[mode] = pygame.Rect(bx, y, btn_w, btn_h)
+        return rects
+
+    def get_layout_button_y(self, player, game_manager):
+        pos = _get_seat_position(player.seat_index, len(game_manager.players))
+        card_positions = self._compute_card_positions(player, pos, game_manager)
+        if card_positions:
+            return int(card_positions[0][1]) - 28 - 18
+        return pos[1] - 50
+
+    def init_free_positions(self, player, game_manager):
+        pos = _get_seat_position(player.seat_index, len(game_manager.players))
+        defaults = self._default_line_positions(pos[0], pos[1])
+        for i, p in enumerate(defaults):
+            if i not in player.card_positions:
+                player.card_positions[i] = p
+
+    def _render_card_face_on_surface(self, surface, card):
+        rect = surface.get_rect()
+        pygame.draw.rect(surface, CARD_WHITE, rect, border_radius=CORNER_RADIUS)
+        color = RED if card.is_red else BLACK
+        big_surf = self.card_big_font.render(card.rank, True, color)
+        big_rect = big_surf.get_rect(center=(rect.width // 2, rect.height // 2 - 8))
+        surface.blit(big_surf, big_rect)
+        suit_surf = self.card_font.render(card.suit_symbol, True, color)
+        suit_rect = suit_surf.get_rect(center=(rect.width // 2, rect.height // 2 + 16))
+        surface.blit(suit_surf, suit_rect)
+        pygame.draw.rect(surface, (180, 180, 180), rect, 1, border_radius=CORNER_RADIUS)
+
+    def _render_card_back_on_surface(self, surface):
+        rect = surface.get_rect()
+        pygame.draw.rect(surface, CARD_BACK_BLUE, rect, border_radius=CORNER_RADIUS)
+        inner = pygame.Rect(6, 6, rect.width - 12, rect.height - 12)
+        pygame.draw.rect(surface, CARD_BACK_PATTERN, inner, border_radius=CORNER_RADIUS - 2)
+        pygame.draw.rect(surface, TEXT_WHITE, rect, 1, border_radius=CORNER_RADIUS)
 
     def draw_drawn_card(self, card):
         cx, cy = DRAWN_CARD_POS
@@ -293,7 +476,7 @@ class Renderer:
         pygame.draw.line(self.screen, PANEL_BORDER, (LOG_PANEL_X + 4, LOG_PANEL_Y + 30), (LOG_PANEL_X + LOG_PANEL_W - 4, LOG_PANEL_Y + 30))
         if not log_entries:
             return
-        visible = log_entries[-8:]
+        visible = log_entries[-10:]
         for i, entry in enumerate(visible):
             text = str(entry)
             if len(text) > 35:
@@ -338,16 +521,22 @@ class Renderer:
         player = game_manager.players[player_index]
         num_players = len(game_manager.players)
         pos = _get_seat_position(player.seat_index, num_players)
-        px, py = pos
-        total_width = HAND_SIZE * CARD_SPREAD + (CARD_WIDTH - CARD_SPREAD)
-        start_x = px - total_width // 2
-        start_y = py - CARD_HEIGHT // 2 + 4
+        card_positions = self._compute_card_positions(player, pos, game_manager)
         rects = []
         for slot_index in range(HAND_SIZE):
-            cx = start_x + slot_index * CARD_SPREAD
-            cy = start_y
-            rects.append(pygame.Rect(cx, cy, CARD_WIDTH, CARD_HEIGHT))
+            if slot_index < len(card_positions):
+                cx, cy = card_positions[slot_index]
+                rects.append(pygame.Rect(cx, cy, CARD_WIDTH, CARD_HEIGHT))
+            else:
+                rects.append(pygame.Rect(0, 0, CARD_WIDTH, CARD_HEIGHT))
         return rects
+
+    def get_card_center(self, player_index, slot_index, game_manager):
+        rects = self.get_card_rects(player_index, game_manager)
+        if slot_index < len(rects):
+            r = rects[slot_index]
+            return (r.centerx, r.centery)
+        return (0, 0)
 
     def get_deck_rect(self):
         cx, cy = DECK_CENTER
@@ -359,9 +548,304 @@ class Renderer:
             self.peek_reveal['timer'] -= dt
             if self.peek_reveal['timer'] <= 0:
                 self.peek_reveal = None
+        self.animation_queue.update(dt)
 
     def set_peek_reveal(self, card, x, y, duration):
         self.peek_reveal = {'card': card, 'x': x, 'y': y, 'timer': duration}
+
+    def is_animating(self):
+        return self.animation_queue.is_animating()
+
+    def set_game_settings(self, settings):
+        self.game_settings = settings
+
+    def effective_anim_duration(self, base_duration):
+        if self.game_settings and not self.game_settings.animations_enabled:
+            return 0.01
+        return base_duration
+
+    def push_draw_animation(self, game_manager):
+        deck_cx, deck_cy = DECK_CENTER
+        drawn_cx, drawn_cy = DRAWN_CARD_POS
+        event = VisualEvent(
+            VisualEventType.CARD_SLIDE,
+            start_pos=(deck_cx, deck_cy),
+            end_pos=(drawn_cx, drawn_cy),
+            card=game_manager.drawn_card,
+            duration=self.effective_anim_duration(ANIM_DRAW_DURATION),
+            start_face_up=True,
+        )
+        self.animation_queue.add(event)
+
+    def push_swap_animation(self, game_manager, slot_index, swapped_card):
+        drawn_cx, drawn_cy = DRAWN_CARD_POS
+        human_idx = None
+        for i, p in enumerate(game_manager.players):
+            if p.is_human:
+                human_idx = i
+                break
+        if human_idx is None:
+            return
+        slot_center = self.get_card_center(human_idx, slot_index, game_manager)
+        discard_cx, discard_cy = DISCARD_POS
+        slide_to_slot = VisualEvent(
+            VisualEventType.CARD_SLIDE,
+            start_pos=(drawn_cx, drawn_cy),
+            end_pos=slot_center,
+            card=game_manager.drawn_card,
+            duration=self.effective_anim_duration(ANIM_SWAP_DURATION),
+            start_face_up=True,
+        )
+        fade_to_discard = VisualEvent(
+            VisualEventType.CARD_FADE_OUT,
+            start_pos=slot_center,
+            end_pos=(discard_cx, discard_cy),
+            card=swapped_card,
+            duration=self.effective_anim_duration(ANIM_SWAP_DURATION),
+            start_face_up=True,
+            start_scale=1.0,
+            end_scale=0.6,
+        )
+        self.animation_queue.add(slide_to_slot)
+        self.animation_queue.add(fade_to_discard)
+
+    def push_unseen_swap_animation(self, game_manager, my_slot, target_player_idx, their_slot):
+        human_idx = None
+        for i, p in enumerate(game_manager.players):
+            if p.is_human:
+                human_idx = i
+                break
+        if human_idx is None:
+            return
+        my_center = self.get_card_center(human_idx, my_slot, game_manager)
+        their_center = self.get_card_center(target_player_idx, their_slot, game_manager)
+        my_card = game_manager.players[human_idx].hand[my_slot]
+        their_card = game_manager.players[target_player_idx].hand[their_slot]
+        arc_my = VisualEvent(
+            VisualEventType.CARD_ARC,
+            start_pos=my_center,
+            end_pos=their_center,
+            card=my_card,
+            duration=self.effective_anim_duration(ANIM_UNSEEN_SWAP_DURATION),
+            arc_height=80,
+            start_face_up=False,
+        )
+        arc_their = VisualEvent(
+            VisualEventType.CARD_ARC,
+            start_pos=their_center,
+            end_pos=my_center,
+            card=their_card,
+            duration=self.effective_anim_duration(ANIM_UNSEEN_SWAP_DURATION),
+            arc_height=80,
+            start_face_up=False,
+        )
+        flash = VisualEvent(
+            VisualEventType.SCREEN_FLASH,
+            start_pos=(0, 0),
+            end_pos=(0, 0),
+            duration=self.effective_anim_duration(ANIM_FLASH_DURATION),
+            text_color=SWAP_GREEN,
+        )
+        self.animation_queue.add(flash)
+        self.animation_queue.add(arc_my)
+        self.animation_queue.add(arc_their)
+
+    def push_seen_swap_animation(self, game_manager, my_slot, target_player_idx, their_slot, card_received):
+        human_idx = None
+        for i, p in enumerate(game_manager.players):
+            if p.is_human:
+                human_idx = i
+                break
+        if human_idx is None:
+            return
+        my_center = self.get_card_center(human_idx, my_slot, game_manager)
+        their_center = self.get_card_center(target_player_idx, their_slot, game_manager)
+        my_card = game_manager.players[human_idx].hand[my_slot]
+        arc_my = VisualEvent(
+            VisualEventType.CARD_ARC,
+            start_pos=my_center,
+            end_pos=their_center,
+            card=my_card,
+            duration=self.effective_anim_duration(ANIM_SEEN_SWAP_DURATION),
+            arc_height=80,
+            start_face_up=False,
+        )
+        arc_their = VisualEvent(
+            VisualEventType.CARD_FLIP_ARC,
+            start_pos=their_center,
+            end_pos=my_center,
+            card=card_received,
+            duration=self.effective_anim_duration(ANIM_SEEN_SWAP_DURATION),
+            arc_height=80,
+            flip_at_peak=True,
+            start_face_up=False,
+            face_up_at_end=False,
+        )
+        flash = VisualEvent(
+            VisualEventType.SCREEN_FLASH,
+            start_pos=(0, 0),
+            end_pos=(0, 0),
+            duration=self.effective_anim_duration(ANIM_FLASH_DURATION),
+            text_color=SWAP_GREEN,
+        )
+        self.animation_queue.add(flash)
+        self.animation_queue.add(arc_my)
+        self.animation_queue.add(arc_their)
+        note_y = (my_center[1] + their_center[1]) / 2 - 60
+        note_x = (my_center[0] + their_center[0]) / 2
+        notif = VisualEvent(
+            VisualEventType.NOTIFICATION_TEXT,
+            start_pos=(note_x, note_y),
+            end_pos=(note_x, note_y),
+            duration=self.effective_anim_duration(ANIM_NOTIFICATION_DURATION),
+            text=f"Received: {card_received.display_name}",
+            text_color=GOLD,
+        )
+        self.animation_queue.add(notif)
+
+    def push_discard_animation(self, game_manager):
+        drawn_cx, drawn_cy = DRAWN_CARD_POS
+        discard_cx, discard_cy = DISCARD_POS
+        event = VisualEvent(
+            VisualEventType.CARD_SLIDE,
+            start_pos=(drawn_cx, drawn_cy),
+            end_pos=(discard_cx, discard_cy),
+            card=game_manager.drawn_card,
+            duration=self.effective_anim_duration(ANIM_DISCARD_DURATION),
+            start_face_up=True,
+        )
+        self.animation_queue.add(event)
+
+    def push_peek_lift_animation(self, game_manager, target_pos):
+        event = VisualEvent(
+            VisualEventType.CARD_LIFT,
+            start_pos=target_pos,
+            end_pos=(target_pos[0], target_pos[1] - 15),
+            duration=self.effective_anim_duration(ANIM_PEEK_LIFT_DURATION),
+            start_face_up=False,
+        )
+        self.animation_queue.add(event)
+
+    def push_pair_fly_animation(self, game_manager, pos1, card1, pos2=None, card2=None):
+        discard_cx, discard_cy = DISCARD_POS
+        fly1 = VisualEvent(
+            VisualEventType.CARD_FADE_OUT,
+            start_pos=pos1,
+            end_pos=(discard_cx, discard_cy),
+            card=card1,
+            duration=self.effective_anim_duration(ANIM_PAIR_FLY_DURATION),
+            start_face_up=True,
+            start_scale=1.0,
+            end_scale=0.5,
+        )
+        self.animation_queue.add(fly1)
+        if pos2 is not None and card2 is not None:
+            fly2 = VisualEvent(
+                VisualEventType.CARD_FADE_OUT,
+                start_pos=pos2,
+                end_pos=(discard_cx + 30, discard_cy),
+                card=card2,
+                duration=self.effective_anim_duration(ANIM_PAIR_FLY_DURATION),
+                start_face_up=True,
+                start_scale=1.0,
+                end_scale=0.5,
+            )
+            self.animation_queue.add(fly2)
+        flash = VisualEvent(
+            VisualEventType.SCREEN_FLASH,
+            start_pos=(0, 0),
+            end_pos=(0, 0),
+            duration=self.effective_anim_duration(ANIM_FLASH_DURATION),
+            text_color=PAIR_TEAL,
+        )
+        self.animation_queue.add(flash)
+
+    def push_ai_peek_animation(self, player_idx, slot_idx, game_manager):
+        center = self.get_card_center(player_idx, slot_idx, game_manager)
+        lift = VisualEvent(
+            VisualEventType.CARD_LIFT,
+            start_pos=center,
+            end_pos=(center[0], center[1] - 15),
+            duration=self.effective_anim_duration(ANIM_PEEK_LIFT_DURATION),
+            start_face_up=False,
+        )
+        pos = _get_seat_position(game_manager.players[player_idx].seat_index, len(game_manager.players))
+        notif = VisualEvent(
+            VisualEventType.NOTIFICATION_TEXT,
+            start_pos=(pos[0], pos[1] - 60),
+            end_pos=(pos[0], pos[1] - 60),
+            duration=self.effective_anim_duration(ANIM_NOTIFICATION_DURATION),
+            text=f"{game_manager.players[player_idx].name} peeked!",
+            text_color=PEEK_BLUE,
+        )
+        self.animation_queue.add(lift)
+        self.animation_queue.add(notif)
+
+    def push_ai_swap_animation(self, game_manager, target_player_idx, their_slot):
+        their_center = self.get_card_center(target_player_idx, their_slot, game_manager)
+        discard_cx, discard_cy = DISCARD_POS
+        fade_to_discard = VisualEvent(
+            VisualEventType.CARD_FADE_OUT,
+            start_pos=their_center,
+            end_pos=(discard_cx, discard_cy),
+            duration=self.effective_anim_duration(ANIM_SWAP_DURATION),
+            start_face_up=False,
+            start_scale=1.0,
+            end_scale=0.6,
+        )
+        self.animation_queue.add(fade_to_discard)
+
+    def push_ai_skip_animation(self, game_manager, player_idx):
+        pos = _get_seat_position(game_manager.players[player_idx].seat_index, len(game_manager.players))
+        notif = VisualEvent(
+            VisualEventType.NOTIFICATION_TEXT,
+            start_pos=(pos[0], pos[1] - 60),
+            end_pos=(pos[0], pos[1] - 60),
+            duration=self.effective_anim_duration(ANIM_NOTIFICATION_DURATION),
+            text="Skip next player!",
+            text_color=DECLARE_RED,
+        )
+        flash = VisualEvent(
+            VisualEventType.SCREEN_FLASH,
+            start_pos=(0, 0),
+            end_pos=(0, 0),
+            duration=self.effective_anim_duration(ANIM_FLASH_DURATION),
+            text_color=DECLARE_RED,
+        )
+        self.animation_queue.add(flash)
+        self.animation_queue.add(notif)
+
+    def push_ai_pair_animation(self, game_manager, pos1, pos2=None):
+        discard_cx, discard_cy = DISCARD_POS
+        fly1 = VisualEvent(
+            VisualEventType.CARD_FADE_OUT,
+            start_pos=pos1,
+            end_pos=(discard_cx, discard_cy),
+            duration=self.effective_anim_duration(ANIM_PAIR_FLY_DURATION),
+            start_face_up=False,
+            start_scale=1.0,
+            end_scale=0.5,
+        )
+        self.animation_queue.add(fly1)
+        if pos2 is not None:
+            fly2 = VisualEvent(
+                VisualEventType.CARD_FADE_OUT,
+                start_pos=pos2,
+                end_pos=(discard_cx + 30, discard_cy),
+                duration=self.effective_anim_duration(ANIM_PAIR_FLY_DURATION),
+                start_face_up=False,
+                start_scale=1.0,
+                end_scale=0.5,
+            )
+            self.animation_queue.add(fly2)
+        flash = VisualEvent(
+            VisualEventType.SCREEN_FLASH,
+            start_pos=(0, 0),
+            end_pos=(0, 0),
+            duration=self.effective_anim_duration(ANIM_FLASH_DURATION),
+            text_color=PAIR_TEAL,
+        )
+        self.animation_queue.add(flash)
 
     def _draw_rounded_rect(self, surface, color, rect, radius):
         pygame.draw.rect(surface, color, rect, border_radius=radius)
@@ -402,3 +886,18 @@ class Renderer:
         shadow_surf = pygame.Surface((CARD_WIDTH, CARD_HEIGHT), pygame.SRCALPHA)
         shadow_surf.fill((*CARD_SHADOW, 80))
         self.screen.blit(shadow_surf, (x + 2, y + 2))
+
+    def draw_gear_icon(self, mouse_pos, settings_open=False):
+        rect = pygame.Rect(SCREEN_WIDTH - 52, 8, 40, 34)
+        hovered = rect.collidepoint(mouse_pos) and not settings_open
+        color = (160, 160, 160) if hovered else (100, 100, 100)
+        bg_color = (30, 30, 30) if hovered else (20, 20, 20)
+        bg_rect = pygame.Rect(rect.x - 4, rect.y - 4, rect.width + 8, rect.height + 8)
+        self._draw_rounded_rect(self.screen, bg_color, bg_rect, 6)
+        gear_surf = self.ui_font.render('\u2699', True, color)
+        gear_rect = gear_surf.get_rect(center=rect.center)
+        self.screen.blit(gear_surf, gear_rect)
+        return rect
+
+    def get_gear_rect(self):
+        return pygame.Rect(SCREEN_WIDTH - 52, 8, 40, 34)

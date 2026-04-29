@@ -13,6 +13,8 @@ class Player:
         self.known_opponent_cards: dict = {}
         self.has_peeked_initial: bool = False
         self.is_declaring: bool = False
+        self.layout_mode: str = 'line'
+        self.card_positions: dict = {}
 
     @property
     def has_zero_cards(self) -> bool:
