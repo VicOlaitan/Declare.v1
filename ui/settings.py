@@ -247,6 +247,29 @@ class SettingsMenu:
                 return i
         return None
 
+    def _draw_section_icon(self, surface, icon_type, cx, cy, color):
+        if icon_type == 'cards':
+            r = 3
+            gaps = [1, 2, 3]
+            for i, g in enumerate(gaps):
+                x = cx - 8 + i * (r * 2 + 2)
+                pygame.draw.rect(surface, color, (x, cy - r, r * 2, r * 2), border_radius=1)
+        elif icon_type == 'speed':
+            pygame.draw.circle(surface, color, (cx, cy), 7, 1)
+            pygame.draw.line(surface, color, (cx, cy), (cx + 5, cy - 5), 2)
+            pygame.draw.circle(surface, color, (cx, cy), 2)
+        elif icon_type == 'target':
+            pygame.draw.circle(surface, color, (cx, cy), 8, 1)
+            pygame.draw.circle(surface, color, (cx, cy), 5, 1)
+            pygame.draw.circle(surface, color, (cx, cy), 2)
+        elif icon_type == 'eye':
+            pygame.draw.ellipse(surface, color, (cx - 9, cy - 5, 18, 10), 1)
+            pygame.draw.circle(surface, color, (cx, cy), 2)
+        elif icon_type == 'play':
+            pts = [(cx - 5, cy - 7), (cx - 5, cy + 7), (cx + 7, cy)]
+            pygame.draw.polygon(surface, color, pts)
+            pygame.draw.polygon(surface, color, pts, 1)
+
     def draw(self, game_settings, game_manager, mouse_pos):
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 160))
@@ -271,11 +294,11 @@ class SettingsMenu:
         self.screen.blit(title_surf, title_rect2)
 
         SECTION_ICONS = {
-            'CARD LAYOUT': '\u25a6',
-            'GAME SPEED': '\u231a',
-            'AI DIFFICULTY': '\u2699',
-            'DISPLAY': '\u25ce',
-            'GAMEPLAY': '\u2694',
+            'CARD LAYOUT': 'cards',
+            'GAME SPEED': 'speed',
+            'AI DIFFICULTY': 'target',
+            'DISPLAY': 'eye',
+            'GAMEPLAY': 'play',
         }
 
         for ctrl in self._controls:
@@ -283,11 +306,10 @@ class SettingsMenu:
             ctype = ctrl['type']
 
             if ctype == 'section':
-                icon = SECTION_ICONS.get(ctrl['text'], '')
-                icon_surf = self.section_font.render(icon, True, GOLD)
-                self.screen.blit(icon_surf, (rect.x, rect.y))
+                icon_type = SECTION_ICONS.get(ctrl['text'], '')
+                self._draw_section_icon(self.screen, icon_type, rect.x + 10, rect.y + 9, (180, 160, 60))
                 text_surf = self.section_font.render(ctrl['text'], True, GOLD)
-                self.screen.blit(text_surf, (rect.x + 18, rect.y))
+                self.screen.blit(text_surf, (rect.x + 26, rect.y))
                 pygame.draw.line(self.screen, PANEL_BORDER, (rect.x, rect.y + 18),
                                 (self.PANEL_X + self.PANEL_W - 20, rect.y + 18), 1)
 
