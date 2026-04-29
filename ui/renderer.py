@@ -144,14 +144,27 @@ class Renderer:
 
     def _draw_status_bar(self, game_manager):
         bar_rect = pygame.Rect(0, 0, SCREEN_WIDTH, STATUS_BAR_H)
-        pygame.draw.rect(self.screen, BG_DARK, bar_rect)
-        pygame.draw.line(self.screen, PANEL_BORDER, (0, STATUS_BAR_H), (SCREEN_WIDTH, STATUS_BAR_H))
+        gradient_surf = pygame.Surface((SCREEN_WIDTH, STATUS_BAR_H))
+        for i in range(STATUS_BAR_H):
+            t = i / STATUS_BAR_H
+            r = int(25 + 10 * t)
+            g = int(55 + 20 * t)
+            b = int(30 + 10 * t)
+            gradient_surf.set_at((0, i), (r, g, b))
+            for j in range(1, SCREEN_WIDTH):
+                gradient_surf.set_at((j, i), (r, g, b))
+        self.screen.blit(gradient_surf, (0, 0))
+        pygame.draw.line(self.screen, (50, 100, 60), (0, 1), (SCREEN_WIDTH, 1))
+        pygame.draw.line(self.screen, GOLD, (0, STATUS_BAR_H - 2), (SCREEN_WIDTH, STATUS_BAR_H - 2))
+        pygame.draw.line(self.screen, (100, 60, 20), (0, STATUS_BAR_H - 1), (SCREEN_WIDTH, STATUS_BAR_H - 1))
         state_label = STATE_LABELS.get(game_manager.state, str(game_manager.state.value))
         current_player = game_manager.current_player()
         round_surf = self.ui_font.render(f"Round {game_manager.round_number}", True, TEXT_DIM)
         self.screen.blit(round_surf, (12, (STATUS_BAR_H - round_surf.get_height()) // 2))
         name_surf = self.ui_font.render(current_player.name, True, GOLD)
         self.screen.blit(name_surf, (120, (STATUS_BAR_H - name_surf.get_height()) // 2))
+        sep = self.small_font.render("◆", True, GOLD)
+        self.screen.blit(sep, (116 + round_surf.get_width(), (STATUS_BAR_H - sep.get_height()) // 2))
         state_surf = self.small_font.render(state_label, True, TEXT_DIM)
         self.screen.blit(state_surf, (120 + name_surf.get_width() + 12, (STATUS_BAR_H - state_surf.get_height()) // 2 + 1))
 
@@ -315,6 +328,44 @@ class Renderer:
                 k_rect = k_surf.get_rect(center=(cx, cy + base_h + 5))
                 self.screen.blit(k_surf, k_rect)
 
+    def _draw_card_back_medallion(self, surface, cx, cy, scale=1.0):
+        w, h = int(44 * scale), int(30 * scale)
+        hw, hh = w // 2, h // 2
+        fill = (50, 85, 155)
+        hi = (190, 210, 240)
+        lo = (30, 55, 120)
+
+        oval_rect = pygame.Rect(cx - hw, cy - hh, w, h)
+        pygame.draw.ellipse(surface, fill, oval_rect)
+        pygame.draw.ellipse(surface, hi, oval_rect, 1)
+
+        left_curl = [
+            (cx - hw, cy),
+            (cx - hw - int(8 * scale), cy - int(4 * scale)),
+            (cx - hw - int(6 * scale), cy - int(10 * scale)),
+            (cx - hw + int(2 * scale), cy - int(8 * scale)),
+        ]
+        right_curl = [
+            (cx + hw, cy),
+            (cx + hw + int(8 * scale), cy - int(4 * scale)),
+            (cx + hw + int(6 * scale), cy - int(10 * scale)),
+            (cx + hw - int(2 * scale), cy - int(8 * scale)),
+        ]
+        pygame.draw.lines(surface, fill, False, left_curl, 2)
+        pygame.draw.lines(surface, hi, False, left_curl, 1)
+        pygame.draw.lines(surface, fill, False, right_curl, 2)
+        pygame.draw.lines(surface, hi, False, right_curl, 1)
+
+        inner_diamond = [
+            (cx, cy - int(10 * scale)), (cx + int(8 * scale), cy),
+            (cx, cy + int(10 * scale)), (cx - int(8 * scale), cy)
+        ]
+        pygame.draw.polygon(surface, lo, inner_diamond)
+        pygame.draw.polygon(surface, hi, inner_diamond, 1)
+
+        dot = pygame.Rect(cx - 2, cy - 2, 4, 4)
+        pygame.draw.rect(surface, hi, dot, border_radius=1)
+
     def draw_card_back(self, x, y, has_known_marker=False):
         rect = pygame.Rect(x, y, CARD_WIDTH, CARD_HEIGHT)
         self._draw_shadow(x, y)
@@ -335,24 +386,7 @@ class Renderer:
 
         dcx = x + CARD_WIDTH // 2
         dcy = y + CARD_HEIGHT // 2
-
-        outer_ring_pts = [
-            (dcx, dcy - 30), (dcx + 10, dcy - 28), (dcx + 18, dcy - 20),
-            (dcx + 20, dcy - 10), (dcx + 22, dcy), (dcx + 20, dcy + 10),
-            (dcx + 18, dcy + 20), (dcx + 10, dcy + 28), (dcx, dcy + 30),
-            (dcx - 10, dcy + 28), (dcx - 18, dcy + 20), (dcx - 20, dcy + 10),
-            (dcx - 22, dcy), (dcx - 20, dcy - 10), (dcx - 18, dcy - 20),
-            (dcx - 10, dcy - 28),
-        ]
-        pygame.draw.polygon(self.screen, (50, 90, 170), outer_ring_pts)
-        pygame.draw.polygon(self.screen, (200, 220, 255), outer_ring_pts, 1)
-
-        inner_diamond = [(dcx, dcy - 14), (dcx + 14, dcy), (dcx, dcy + 14), (dcx - 14, dcy)]
-        pygame.draw.polygon(self.screen, (80, 120, 190), inner_diamond)
-        pygame.draw.polygon(self.screen, (200, 220, 255), inner_diamond, 1)
-
-        center_dot = pygame.Rect(dcx - 3, dcy - 3, 6, 6)
-        pygame.draw.rect(self.screen, (220, 235, 255), center_dot, border_radius=2)
+        self._draw_card_back_medallion(self.screen, dcx, dcy)
 
         pygame.draw.rect(self.screen, TEXT_WHITE, rect, 1, border_radius=CORNER_RADIUS)
 
@@ -427,22 +461,7 @@ class Renderer:
                 if i < inner_h:
                     pygame.draw.line(cross_surf, line_color, (0, i), (inner_w, i))
             self.screen.blit(cross_surf, (inner_x, inner_y))
-            dcx = cx
-            dcy = cy
-            outer_ring_pts = [
-                (dcx, dcy - 30), (dcx + 10, dcy - 28), (dcx + 18, dcy - 20),
-                (dcx + 20, dcy - 10), (dcx + 22, dcy), (dcx + 20, dcy + 10),
-                (dcx + 18, dcy + 20), (dcx + 10, dcy + 28), (dcx, dcy + 30),
-                (dcx - 10, dcy + 28), (dcx - 18, dcy + 20), (dcx - 20, dcy + 10),
-                (dcx - 22, dcy), (dcx - 20, dcy - 10), (dcx - 18, dcy - 20),
-                (dcx - 10, dcy - 28),
-            ]
-            pygame.draw.polygon(self.screen, (50, 90, 170), outer_ring_pts)
-            pygame.draw.polygon(self.screen, (200, 220, 255), outer_ring_pts, 1)
-            inner_diamond = [(dcx, dcy - 14), (dcx + 14, dcy), (dcx, dcy + 14), (dcx - 14, dcy)]
-            pygame.draw.polygon(self.screen, (80, 120, 190), inner_diamond)
-            pygame.draw.polygon(self.screen, (200, 220, 255), inner_diamond, 1)
-            pygame.draw.circle(self.screen, (220, 235, 255), (dcx, dcy), 3)
+            self._draw_card_back_medallion(self.screen, cx, cy)
             pygame.draw.rect(self.screen, TEXT_WHITE, top_rect, 1, border_radius=CORNER_RADIUS)
             count_surf = self.small_font.render(str(remaining), True, TEXT_WHITE)
             count_rect = count_surf.get_rect(center=(cx, cy + CARD_HEIGHT // 2 + 14))
@@ -706,20 +725,7 @@ class Renderer:
         surface.blit(cross_surf, (inner_x, inner_y))
         dcx = rect.width // 2
         dcy = rect.height // 2
-        outer_ring_pts = [
-            (dcx, dcy - 30), (dcx + 10, dcy - 28), (dcx + 18, dcy - 20),
-            (dcx + 20, dcy - 10), (dcx + 22, dcy), (dcx + 20, dcy + 10),
-            (dcx + 18, dcy + 20), (dcx + 10, dcy + 28), (dcx, dcy + 30),
-            (dcx - 10, dcy + 28), (dcx - 18, dcy + 20), (dcx - 20, dcy + 10),
-            (dcx - 22, dcy), (dcx - 20, dcy - 10), (dcx - 18, dcy - 20),
-            (dcx - 10, dcy - 28),
-        ]
-        pygame.draw.polygon(surface, (50, 90, 170), outer_ring_pts)
-        pygame.draw.polygon(surface, (200, 220, 255), outer_ring_pts, 1)
-        inner_diamond = [(dcx, dcy - 14), (dcx + 14, dcy), (dcx, dcy + 14), (dcx - 14, dcy)]
-        pygame.draw.polygon(surface, (80, 120, 190), inner_diamond)
-        pygame.draw.polygon(surface, (200, 220, 255), inner_diamond, 1)
-        pygame.draw.circle(surface, (220, 235, 255), (dcx, dcy), 3)
+        self._draw_card_back_medallion(surface, dcx, dcy)
         pygame.draw.rect(surface, TEXT_WHITE, rect, 1, border_radius=CORNER_RADIUS)
 
     def draw_drawn_card(self, card):

@@ -78,6 +78,40 @@ class MenuScreen:
         self.quit_button = Button(SCREEN_WIDTH // 2, 500, 260, 54, "Quit", DECLARE_RED, DECLARE_RED_HOVER)
         self.buttons = [self.new_game_button, self.quit_button]
 
+    def _draw_card_back_medallion(self, surface, cx, cy, scale=1.0):
+        w, h = int(44 * scale), int(30 * scale)
+        hw, hh = w // 2, h // 2
+        fill = (50, 85, 155)
+        hi = (190, 210, 240)
+        lo = (30, 55, 120)
+        oval_rect = pygame.Rect(cx - hw, cy - hh, w, h)
+        pygame.draw.ellipse(surface, fill, oval_rect)
+        pygame.draw.ellipse(surface, hi, oval_rect, 1)
+        left_curl = [
+            (cx - hw, cy),
+            (cx - hw - int(8 * scale), cy - int(4 * scale)),
+            (cx - hw - int(6 * scale), cy - int(10 * scale)),
+            (cx - hw + int(2 * scale), cy - int(8 * scale)),
+        ]
+        right_curl = [
+            (cx + hw, cy),
+            (cx + hw + int(8 * scale), cy - int(4 * scale)),
+            (cx + hw + int(6 * scale), cy - int(10 * scale)),
+            (cx + hw - int(2 * scale), cy - int(8 * scale)),
+        ]
+        pygame.draw.lines(surface, fill, False, left_curl, 2)
+        pygame.draw.lines(surface, hi, False, left_curl, 1)
+        pygame.draw.lines(surface, fill, False, right_curl, 2)
+        pygame.draw.lines(surface, hi, False, right_curl, 1)
+        inner_diamond = [
+            (cx, cy - int(10 * scale)), (cx + int(8 * scale), cy),
+            (cx, cy + int(10 * scale)), (cx - int(8 * scale), cy)
+        ]
+        pygame.draw.polygon(surface, lo, inner_diamond)
+        pygame.draw.polygon(surface, hi, inner_diamond, 1)
+        dot = pygame.Rect(cx - 2, cy - 2, 4, 4)
+        pygame.draw.rect(surface, hi, dot, border_radius=1)
+
     def _draw_menu_card_back(self, cx, cy, angle=0):
         surf = pygame.Surface((CARD_WIDTH + 20, CARD_HEIGHT + 20), pygame.SRCALPHA)
         rect = pygame.Rect(10, 10, CARD_WIDTH, CARD_HEIGHT)
@@ -93,22 +127,7 @@ class MenuScreen:
             if i < inner_h:
                 pygame.draw.line(cross_surf, line_color, (0, i), (inner_w, i))
         surf.blit(cross_surf, (10, 10))
-        dcx = 10 + CARD_WIDTH // 2
-        dcy = 10 + CARD_HEIGHT // 2
-        outer_ring_pts = [
-            (dcx, dcy - 30), (dcx + 10, dcy - 28), (dcx + 18, dcy - 20),
-            (dcx + 20, dcy - 10), (dcx + 22, dcy), (dcx + 20, dcy + 10),
-            (dcx + 18, dcy + 20), (dcx + 10, dcy + 28), (dcx, dcy + 30),
-            (dcx - 10, dcy + 28), (dcx - 18, dcy + 20), (dcx - 20, dcy + 10),
-            (dcx - 22, dcy), (dcx - 20, dcy - 10), (dcx - 18, dcy - 20),
-            (dcx - 10, dcy - 28),
-        ]
-        pygame.draw.polygon(surf, (50, 90, 170), outer_ring_pts)
-        pygame.draw.polygon(surf, (200, 220, 255), outer_ring_pts, 1)
-        inner_diamond = [(dcx, dcy - 14), (dcx + 14, dcy), (dcx, dcy + 14), (dcx - 14, dcy)]
-        pygame.draw.polygon(surf, (80, 120, 190), inner_diamond)
-        pygame.draw.polygon(surf, (200, 220, 255), inner_diamond, 1)
-        pygame.draw.circle(surf, (220, 235, 255), (dcx, dcy), 3)
+        self._draw_card_back_medallion(surf, 10 + CARD_WIDTH // 2, 10 + CARD_HEIGHT // 2)
         pygame.draw.rect(surf, TEXT_WHITE, rect, 1, border_radius=CORNER_RADIUS)
         if angle != 0:
             surf = pygame.transform.rotate(surf, angle)
