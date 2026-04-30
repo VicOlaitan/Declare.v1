@@ -9,9 +9,12 @@ from config import (
     DEFAULT_AI_DELAY, DEFAULT_PEEK_REVEAL_TIME, DEFAULT_PEEK_PHASE_SECONDS,
     DEFAULT_ANIMATIONS_ENABLED, DEFAULT_SHOW_OWN_SCORE, DEFAULT_SHOW_KNOWN_MARKER,
     DEFAULT_SHOW_GAME_LOG, DEFAULT_CONFIRM_DECLARE, DEFAULT_LAYOUT_MODE, DEFAULT_FELT,
+    DEFAULT_SELF_PAIR_ENABLED, DEFAULT_SHUFFLE_ENABLED, DEFAULT_WRONG_DROP_PENALTY,
+    DEFAULT_REACTION_WINDOW_SECONDS,
     AI_DELAY_OPTIONS, AI_DELAY_LABELS, PEEK_REVEAL_OPTIONS, PEEK_REVEAL_LABELS,
     ANIMATION_OPTIONS, ANIMATION_LABELS, LAYOUT_OPTIONS, LAYOUT_LABELS,
     AI_DIFFICULTY_OPTIONS, AI_DIFFICULTY_LABELS, PEEK_PHASE_OPTIONS, PEEK_PHASE_LABELS,
+    REACTION_WINDOW_OPTIONS, REACTION_WINDOW_LABELS,
     FELT_COLORS, FELT_LABELS, FELT_COLORS_LIGHT,
     SWAP_GREEN, SWAP_GREEN_HOVER, PEEK_BLUE, PEEK_BLUE_HOVER,
     DECLARE_RED, DECLARE_RED_HOVER, CANCEL_GRAY, CANCEL_GRAY_HOVER,
@@ -21,7 +24,7 @@ from ui.widgets import Button, ToggleButton
 
 class SettingsMenu:
     PANEL_W = 620
-    PANEL_H = 600
+    PANEL_H = 780
     PANEL_X = (SCREEN_WIDTH - PANEL_W) // 2
     PANEL_Y = (SCREEN_HEIGHT - PANEL_H) // 2
     GEAR_X = SCREEN_WIDTH - 52
@@ -219,6 +222,62 @@ class SettingsMenu:
                 'rect': btn.rect, 'btn': btn
             })
             self._all_buttons.append(btn)
+        sy += line_h
+
+        self._controls.append({
+            'type': 'label', 'text': 'Reaction Window:',
+            'rect': pygame.Rect(sx, sy + 5, 130, 20)
+        })
+        for i, (val, lbl) in enumerate(zip(REACTION_WINDOW_OPTIONS, REACTION_WINDOW_LABELS)):
+            bx = sx + 140 + i * 90
+            btn = Button(bx + 40, sy + btn_h // 2, 80, btn_h, lbl, 'secondary', font=self.small_font)
+            self._controls.append({
+                'type': 'reaction_btn', 'value': val, 'label': lbl,
+                'rect': btn.rect, 'btn': btn
+            })
+            self._all_buttons.append(btn)
+        sy += line_h
+
+        self._controls.append({
+            'type': 'label', 'text': 'Self-Pairing:',
+            'rect': pygame.Rect(sx, sy + 5, 130, 20)
+        })
+        for i, (val, lbl) in enumerate(zip([True, False], ['ON', 'OFF'])):
+            bx = sx + 140 + i * 110
+            btn = Button(bx + 50, sy + btn_h // 2, 100, btn_h, lbl, 'secondary', font=self.small_font)
+            self._controls.append({
+                'type': 'self_pair_btn', 'value': val, 'label': lbl,
+                'rect': btn.rect, 'btn': btn
+            })
+            self._all_buttons.append(btn)
+        sy += line_h
+
+        self._controls.append({
+            'type': 'label', 'text': 'Shuffle Cards:',
+            'rect': pygame.Rect(sx, sy + 5, 130, 20)
+        })
+        for i, (val, lbl) in enumerate(zip([True, False], ['ON', 'OFF'])):
+            bx = sx + 140 + i * 110
+            btn = Button(bx + 50, sy + btn_h // 2, 100, btn_h, lbl, 'secondary', font=self.small_font)
+            self._controls.append({
+                'type': 'shuffle_btn', 'value': val, 'label': lbl,
+                'rect': btn.rect, 'btn': btn
+            })
+            self._all_buttons.append(btn)
+        sy += line_h
+
+        self._controls.append({
+            'type': 'label', 'text': 'Wrong-Drop Penalty:',
+            'rect': pygame.Rect(sx, sy + 5, 130, 20)
+        })
+        for i, (val, lbl) in enumerate(zip([True, False], ['ON', 'OFF'])):
+            bx = sx + 140 + i * 110
+            btn = Button(bx + 50, sy + btn_h // 2, 100, btn_h, lbl, 'secondary', font=self.small_font)
+            self._controls.append({
+                'type': 'penalty_btn', 'value': val, 'label': lbl,
+                'rect': btn.rect, 'btn': btn
+            })
+            self._all_buttons.append(btn)
         sy += line_h + 16
 
         done_rect = pygame.Rect(
@@ -283,6 +342,14 @@ class SettingsMenu:
                         game_settings.confirm_declare = ctrl['value']
                     elif ctype == 'peek_phase_btn':
                         game_settings.peek_phase_seconds = ctrl['value']
+                    elif ctype == 'reaction_btn':
+                        game_settings.reaction_window_seconds = ctrl['value']
+                    elif ctype == 'self_pair_btn':
+                        game_settings.self_pair_enabled = ctrl['value']
+                    elif ctype == 'shuffle_btn':
+                        game_settings.shuffle_enabled = ctrl['value']
+                    elif ctype == 'penalty_btn':
+                        game_settings.wrong_drop_penalty = ctrl['value']
                     if 'btn' in ctrl:
                         ctrl['btn'].on_press()
                     return 'updated'
@@ -380,7 +447,8 @@ class SettingsMenu:
 
             elif ctype in ('layout_btn', 'felt_btn', 'ai_delay_btn', 'peek_reveal_btn', 'anim_btn',
                           'ai_diff_btn', 'score_btn', 'marker_btn', 'log_btn',
-                          'confirm_btn', 'peek_phase_btn'):
+                          'confirm_btn', 'peek_phase_btn', 'reaction_btn',
+                          'self_pair_btn', 'shuffle_btn', 'penalty_btn'):
                 active = False
                 if ctype == 'layout_btn':
                     active = (game_settings.layout_mode == ctrl['value'])
@@ -403,6 +471,11 @@ class SettingsMenu:
                     active = (getattr(game_settings, attr_map.get(ctype, ''), False) == ctrl['value'])
                 elif ctype == 'peek_phase_btn':
                     active = abs(game_settings.peek_phase_seconds - ctrl['value']) < 0.05
+                elif ctype == 'reaction_btn':
+                    active = abs(game_settings.reaction_window_seconds - ctrl['value']) < 0.05
+                elif ctype in ('self_pair_btn', 'shuffle_btn', 'penalty_btn'):
+                    attr_map = {'self_pair_btn': 'self_pair_enabled', 'shuffle_btn': 'shuffle_enabled', 'penalty_btn': 'wrong_drop_penalty'}
+                    active = (getattr(game_settings, attr_map.get(ctype, ''), False) == ctrl['value'])
 
                 btn = ctrl.get('btn')
                 if btn:

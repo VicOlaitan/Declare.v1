@@ -82,6 +82,19 @@ def format_action_log(action: str, player_name: str, details: dict = None, card:
             return f"{player_name} used {label} on P{p_idx}" if p_idx is not None else f"{player_name} used {label}"
         return f"{player_name} used {label}"
 
+    if action == 'self_pair':
+        return f"{player_name} self-paired cards"
+
+    if action == 'shuffle':
+        return f"{player_name} shuffled their cards"
+
+    if action == 'react_drop_self':
+        card_str = card.display_name if card else '?'
+        return f"{player_name} dropped {card_str} to match discard"
+
+    if action == 'react_drop_opponent':
+        return f"{player_name} called opponent's matching card"
+
     return f"{player_name}: {action}"
 
 
@@ -107,6 +120,99 @@ def execute_pair_opponent(player: Player, opponent: Player, opponent_slot: int, 
         'opponent_index': opponent.seat_index,
         'opponent_slot_removed': opponent_slot,
         'card_given_slot': give_slot,
+    }
+
+
+def execute_self_pair(player: Player, slot_a: int, slot_b: int) -> dict:
+    card_a = player.remove_card(slot_a)
+    card_b = player.remove_card(slot_b)
+    return {
+        'action': 'self_pair',
+        'slots_removed': [slot_a, slot_b],
+        'cards_discarded': [card_a, card_b],
+    }
+
+
+def can_self_pair(player: Player) -> list:
+    return player.find_self_pairs()
+
+
+def can_react_to_discard(reacting_player: Player, discarded_rank: str) -> list:
+    matching = []
+    for slot in reacting_player.get_active_slots():
+        if slot in reacting_player.known_cards and reacting_player.known_cards[slot].rank == discarded_rank:
+            matching.append(slot)
+    return matching
+
+
+def can_call_opponent_card(reacting_player: Player, opponent: Player, discarded_rank: str) -> list:
+    matching = []
+    for slot in opponent.get_active_slots():
+        if (opponent.seat_index, slot) in reacting_player.known_opponent_cards:
+            if reacting_player.known_opponent_cards[(opponent.seat_index, slot)].rank == discarded_rank:
+                matching.append(slot)
+    return matching
+
+
+def validate_reactive_drop(player: Player, slot: int, expected_rank: str) -> bool:
+    if player.hand[slot] is None:
+        return False
+    return player.hand[slot].rank == expected_rank
+
+
+def execute_reactive_drop_self(player: Player, slot: int) -> dict:
+    card = player.remove_card(slot)
+    return {
+        'action': 'react_drop_self',
+        'slot': slot,
+        'card': card,
+    }
+
+
+def execute_reactive_drop_opponent(reacting_player: Player, opponent: Player, opponent_slot: int, give_slot: int) -> dict:
+    opponent_card = opponent.remove_card(opponent_slot)
+    given_card = reacting_player.remove_card(give_slot)
+    opponent.receive_card(given_card, opponent_slot)
+    return {
+        'action': 'react_drop_opponent',
+        'opponent_index': opponent.seat_index,
+        'opponent_slot': opponent_slot,
+        'give_slot': give_slot,
+        'opponent_card': opponent_card,
+        'given_card': given_card,
+    }
+
+
+def execute_wrong_drop_penalty(player: Player, original_slot: int, all_players: list, deck) -> dict:
+    target_seat = None
+    for p in all_players:
+        for key in player.known_opponent_cards:
+            if key[0] == p.seat_index:
+                target_seat = p.seat_index
+                break
+        if target_seat is not None:
+            break
+
+    target_player = None
+    if target_seat is not None:
+        target_player = next((p for p in all_players if p.seat_index == target_seat), None)
+
+    if target_player is not None:
+        target_player.shuffle_hand(all_players)
+
+    penalty_card = None
+    penalty_slot = None
+    if deck and not deck.is_empty:
+        penalty_card = deck.draw()
+        if penalty_card is not None:
+            penalty_slot = player.add_penalty_card(penalty_card)
+
+    return {
+        'action': 'wrong_drop_penalty',
+        'original_slot': original_slot,
+        'target_player_shuffled': target_seat,
+        'penalty_card': penalty_card,
+        'penalty_slot': penalty_slot,
     }
 
 
@@ -270,6 +376,18 @@ class RulesEngine:
             pair_result = execute_pair_opponent(player, opponent, opponent_slot, drawn_card, give_slot)
             result.update(pair_result)
             self.discard_pile.append(drawn_card)
+
+        elif action == 'self_pair':
+            slot_a = details['slot_a']
+            slot_b = details['slot_b']
+            pair_result = execute_self_pair(player, slot_a, slot_b)
+            result.update(pair_result)
+            self.discard_pile.extend(pair_result['cards_discarded'])
+            for c in pair_result['cards_discarded']:
+                c.face_up = True
+
+        elif action == 'shuffle':
+            player.shuffle_hand(self.players)
 
         self.turn_log.append(result)
         return result

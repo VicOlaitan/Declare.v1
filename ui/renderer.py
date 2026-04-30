@@ -8,6 +8,7 @@ from config import (SCREEN_WIDTH, SCREEN_HEIGHT, BG_DARK, BG_GRADIENT_TOP, BG_GR
     POWER_GLOW, EMPTY_SLOT, KNOWN_TINT, DECLARE_RED, DECLARE_RED_HOVER,
     CANCEL_GRAY, CANCEL_GRAY_HOVER, PEEK_BLUE, PEEK_BLUE_HOVER, SWAP_GREEN,
     SWAP_GREEN_HOVER, DISCARD_ORANGE, DISCARD_ORANGE_HOVER, PAIR_TEAL, PAIR_TEAL_HOVER,
+    SHUFFLE_COLOR, SELF_PAIR_COLOR, DROP_MATCH_COLOR, DROP_MATCH_HOVER,
     STATUS_BAR_H, ACTION_BAR_Y, ACTION_BAR_H,
     CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS, CARD_SPREAD,
     DECK_CENTER, DRAWN_CARD_POS, DISCARD_POS,
@@ -20,6 +21,7 @@ from config import (SCREEN_WIDTH, SCREEN_HEIGHT, BG_DARK, BG_GRADIENT_TOP, BG_GR
     ANIM_DRAW_DURATION, ANIM_SWAP_DURATION, ANIM_UNSEEN_SWAP_DURATION,
     ANIM_SEEN_SWAP_DURATION, ANIM_PEEK_LIFT_DURATION, ANIM_PAIR_FLY_DURATION,
     ANIM_DISCARD_DURATION, ANIM_NOTIFICATION_DURATION, ANIM_FLASH_DURATION,
+    ANIM_SHUFFLE_DURATION, ANIM_REACTIVE_DROP_DURATION, ANIM_PENALTY_DRAW_DURATION,
     PLAYER_AREA_2, PLAYER_AREA_3, PLAYER_AREA_4,
     FELT_COLORS, FELT_COLORS_LIGHT, DEFAULT_FELT)
 from game.card import Card
@@ -53,6 +55,7 @@ STATE_LABELS = {
     GameState.PAIR_CHECK: "Pair Check",
     GameState.TURN_END: "Turn End",
     GameState.RESOLVE_DECLARE: "Resolve Declare",
+    GameState.REACTION_WINDOW: "Reaction!",
     GameState.GAME_OVER: "Game Over",
 }
 
@@ -1265,6 +1268,39 @@ class Renderer:
             text_color=PAIR_TEAL,
         )
         self.animation_queue.add(flash)
+
+    def push_shuffle_animation(self, game_manager, player_idx):
+        player = game_manager.players[player_idx]
+        num_players = len(game_manager.players)
+        pos = _get_seat_position(player.seat_index, num_players)
+        active_slots = player.get_active_slots()
+        for slot in active_slots:
+            center = self.get_card_center(player_idx, slot, game_manager)
+            lift = VisualEvent(
+                VisualEventType.CARD_LIFT,
+                start_pos=center,
+                end_pos=(center[0], center[1] - 20),
+                duration=self.effective_anim_duration(0.2),
+                start_face_up=False,
+            )
+            self.animation_queue.add(lift)
+        notif = VisualEvent(
+            VisualEventType.NOTIFICATION_TEXT,
+            start_pos=(pos[0], pos[1] - 60),
+            end_pos=(pos[0], pos[1] - 60),
+            duration=self.effective_anim_duration(ANIM_NOTIFICATION_DURATION),
+            text="Shuffled!",
+            text_color=SHUFFLE_COLOR,
+        )
+        flash = VisualEvent(
+            VisualEventType.SCREEN_FLASH,
+            start_pos=(0, 0),
+            end_pos=(0, 0),
+            duration=self.effective_anim_duration(ANIM_FLASH_DURATION),
+            text_color=SHUFFLE_COLOR,
+        )
+        self.animation_queue.add(flash)
+        self.animation_queue.add(notif)
 
     def _draw_rounded_rect(self, surface, color, rect, radius):
         pygame.draw.rect(surface, color, rect, border_radius=radius)

@@ -4,6 +4,8 @@ from config import (
     DEFAULT_ANIMATIONS_ENABLED, DEFAULT_SHOW_OWN_SCORE, DEFAULT_SHOW_KNOWN_MARKER,
     DEFAULT_SHOW_GAME_LOG, DEFAULT_CONFIRM_DECLARE, DEFAULT_AI_DIFFICULTY,
     DEFAULT_LAYOUT_MODE, DEFAULT_HAND_SIZE, DEFAULT_PEEK_COUNT, DEFAULT_FELT,
+    DEFAULT_SELF_PAIR_ENABLED, DEFAULT_SHUFFLE_ENABLED, DEFAULT_WRONG_DROP_PENALTY,
+    DEFAULT_REACTION_WINDOW_SECONDS,
 )
 
 
@@ -22,6 +24,10 @@ class GameSettings:
     peek_count: int = DEFAULT_PEEK_COUNT
     felt_style: str = DEFAULT_FELT
     ai_difficulties: dict = field(default_factory=dict)
+    self_pair_enabled: bool = DEFAULT_SELF_PAIR_ENABLED
+    shuffle_enabled: bool = DEFAULT_SHUFFLE_ENABLED
+    wrong_drop_penalty: bool = DEFAULT_WRONG_DROP_PENALTY
+    reaction_window_seconds: float = DEFAULT_REACTION_WINDOW_SECONDS
 
     def effective_anim_duration(self, base_duration: float) -> float:
         if not self.animations_enabled:

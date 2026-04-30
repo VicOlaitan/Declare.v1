@@ -11,6 +11,8 @@ from config import (
     DECLARE_RED, DECLARE_RED_HOVER, CANCEL_GRAY, CANCEL_GRAY_HOVER,
     PEEK_BLUE, PEEK_BLUE_HOVER, SWAP_GREEN, SWAP_GREEN_HOVER,
     DISCARD_ORANGE, DISCARD_ORANGE_HOVER, PAIR_TEAL, PAIR_TEAL_HOVER,
+    SHUFFLE_COLOR, SHUFFLE_HOVER, SELF_PAIR_COLOR, SELF_PAIR_HOVER,
+    DROP_MATCH_COLOR, DROP_MATCH_HOVER,
     STATUS_BAR_H, ACTION_BAR_Y, ACTION_BAR_H,
     CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS, CARD_SPREAD,
     DECK_CENTER, DRAWN_CARD_POS, DISCARD_POS,
@@ -20,18 +22,19 @@ from config import (
     ANIM_DRAW_DURATION, ANIM_SWAP_DURATION, ANIM_UNSEEN_SWAP_DURATION,
     ANIM_SEEN_SWAP_DURATION, ANIM_DISCARD_DURATION, ANIM_PAIR_FLY_DURATION,
     ANIM_NOTIFICATION_DURATION, CARD_GRID_SPACING_X, CARD_GRID_SPACING_Y,
+    ANIM_SHUFFLE_DURATION, ANIM_REACTIVE_DROP_DURATION, ANIM_PENALTY_DRAW_DURATION,
 )
 from game.game_manager import GameManager, GameState
 from game.player import HumanPlayer
 from game.ai import AIDecider
-from game.rules import get_valid_actions
+from game.rules import get_valid_actions, can_self_pair, can_react_to_discard, can_call_opponent_card
 from game.settings import GameSettings
 from ui.renderer import Renderer, _get_seat_position, _player_area_bounds
 from ui.screens import MenuScreen, SetupScreen, PeekScreen, GameOverScreen
 from ui.settings import SettingsMenu
 
 
-def _build_action_buttons(gm, ui_font):
+def _build_action_buttons(gm, ui_font, game_settings=None):
     buttons = {}
     cp = gm.current_player()
     valid = get_valid_actions(cp, gm.drawn_card, gm.has_drawn_this_turn)
@@ -51,8 +54,17 @@ def _build_action_buttons(gm, ui_font):
             rect = pygame.Rect(x - w // 2, btn_y - btn_h // 2, w, btn_h)
             buttons['draw'] = {'rect': rect, 'text': 'Draw', 'color': SWAP_GREEN, 'hover_color': SWAP_GREEN_HOVER, 'font': ui_font}
     elif gm.state == GameState.DECIDE:
-        x = SCREEN_WIDTH // 2 - 360
-        spacing = 10
+        x = SCREEN_WIDTH // 2 - 400
+        spacing = 8
+
+        if game_settings and game_settings.self_pair_enabled:
+            pairs = can_self_pair(cp)
+            if pairs:
+                w = 110
+                rect = pygame.Rect(x, btn_y - btn_h // 2, w, btn_h)
+                buttons['self_pair'] = {'rect': rect, 'text': 'Self-Pair', 'color': SELF_PAIR_COLOR, 'hover_color': SELF_PAIR_HOVER, 'font': ui_font}
+                x += w + spacing
+
         if 'play_power' in valid and gm.drawn_card and gm.drawn_card.power:
             power = gm.drawn_card.power
             label = POWER_LABELS.get(power, 'Power')
@@ -84,6 +96,32 @@ def _build_action_buttons(gm, ui_font):
             w = 130
             rect = pygame.Rect(x, btn_y - btn_h // 2, w, btn_h)
             buttons['declare'] = {'rect': rect, 'text': 'Declare', 'color': DECLARE_RED, 'hover_color': DECLARE_RED_HOVER, 'font': ui_font}
+
+    elif gm.state == GameState.REACTION_WINDOW:
+        x = SCREEN_WIDTH // 2 - 200
+        rank = gm.reaction_rank
+        label = f"Drop {rank}!"
+        w = 140
+        rect = pygame.Rect(x, btn_y - btn_h // 2, w, btn_h)
+        buttons['drop_self'] = {'rect': rect, 'text': label, 'color': DROP_MATCH_COLOR, 'hover_color': DROP_MATCH_HOVER, 'font': ui_font}
+        x += w + spacing
+
+        if gm.reaction_source_player is not None:
+            for opp in gm.players:
+                if opp.seat_index == gm.reaction_source_player or opp.is_human:
+                    continue
+                opp_slots = can_call_opponent_card(cp, opp, rank)
+                if opp_slots:
+                    w = 180
+                    rect = pygame.Rect(x, btn_y - btn_h // 2, w, btn_h)
+                    buttons['drop_opponent'] = {'rect': rect, 'text': f"Call {opp.name}'s {rank}", 'color': PAIR_TEAL, 'hover_color': PAIR_TEAL_HOVER, 'font': ui_font}
+                    x += w + spacing
+                    break
+
+        w = 100
+        rect = pygame.Rect(x, btn_y - btn_h // 2, w, btn_h)
+        buttons['pass_reaction'] = {'rect': rect, 'text': 'Pass', 'color': CANCEL_GRAY, 'hover_color': CANCEL_GRAY_HOVER, 'font': ui_font}
+
     return buttons
 
 
@@ -92,6 +130,16 @@ def _build_cancel_button(text, ui_font):
     h = 40
     rect = pygame.Rect(SCREEN_WIDTH // 2 - w // 2, ACTION_BAR_Y + ACTION_BAR_H + 2, w, h)
     return {'rect': rect, 'text': text, 'font': ui_font}
+
+
+def _build_shuffle_button(player, seat_position, ui_font):
+    px, py = seat_position
+    w = 80
+    h = 28
+    sx = px - w // 2
+    sy = py + CARD_HEIGHT // 2 + 40
+    rect = pygame.Rect(sx, sy, w, h)
+    return {'rect': rect, 'text': 'Shuffle', 'color': SHUFFLE_COLOR, 'hover_color': SHUFFLE_HOVER, 'font': ui_font}
 
 
 def _ai_power_target(ai, player, players, card):
@@ -171,6 +219,10 @@ def main():
 
     dragging_slot = None
     drag_offset = (0, 0)
+
+    react_opponent_index = None
+    react_opponent_slot = None
+    react_give_slot = None
 
     running = True
     while running:
@@ -282,7 +334,7 @@ def main():
                     continue
 
                 cp = game_manager.current_player()
-                if not cp.is_human:
+                if not cp.is_human and game_manager.state != GameState.REACTION_WINDOW:
                     continue
 
                 if turn_end_timer > 0:
@@ -292,7 +344,7 @@ def main():
                     continue
 
                 human_idx = _get_human_index(game_manager)
-                action_buttons = _build_action_buttons(game_manager, ui_font)
+                action_buttons = _build_action_buttons(game_manager, ui_font, game_settings)
                 cancel_button = None
                 if awaiting is not None:
                     cancel_button = _build_cancel_button("Cancel", ui_font)
@@ -314,6 +366,16 @@ def main():
                             status_message = "Click YOUR card to give away"
                         else:
                             status_message = "Click OPPONENT's matching card"
+                    elif awaiting == 'self_pair_first':
+                        status_message = "Click first card to self-pair"
+                    elif awaiting == 'self_pair_second':
+                        status_message = "Click second card to self-pair"
+                    elif awaiting == 'react_drop_self':
+                        status_message = "Click YOUR matching card to drop"
+                    elif awaiting == 'react_drop_opp_give':
+                        status_message = "Click YOUR card to give in exchange"
+                    elif awaiting == 'react_drop_opp_target':
+                        status_message = "Click OPPONENT's matching card"
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     clicked_btn = None
@@ -342,6 +404,14 @@ def main():
                         game_manager.cancel_targeting()
                         continue
 
+                    if game_settings and game_settings.shuffle_enabled and human_idx is not None:
+                        num_players = len(game_manager.players)
+                        seat_pos = _get_seat_position(human_idx, num_players)
+                        shuffle_btn = _build_shuffle_button(game_manager.players[human_idx], seat_pos, ui_font)
+                        if shuffle_btn['rect'].collidepoint(mouse_pos):
+                            game_manager.shuffle_player_hand(human_idx)
+                            continue
+
                     if clicked_btn:
                         if clicked_btn == 'draw' and game_manager.state == GameState.TURN_START:
                             game_manager.draw_card()
@@ -369,14 +439,23 @@ def main():
                                 game_over_result = game_manager.declaration_result
                                 current_screen = "game_over"
 
+                        elif clicked_btn == 'self_pair' and game_manager.state == GameState.DECIDE:
+                            awaiting = 'self_pair_first'
+                            selected_slot = None
+                            status_message = "Click first card to self-pair"
+
                         elif clicked_btn == 'swap' and game_manager.state == GameState.DECIDE:
                             awaiting = 'swap'
                             selected_slot = None
                             status_message = "Click one of your cards to swap with the drawn card"
 
                         elif clicked_btn == 'discard' and game_manager.state == GameState.DECIDE:
+                            discarded = game_manager.drawn_card
                             renderer.push_discard_animation(game_manager)
-                            game_manager.execute_player_action("discard", {"drawn_card": game_manager.drawn_card})
+                            game_manager.execute_player_action("discard", {"drawn_card": discarded})
+                            if game_settings.self_pair_enabled or game_settings.shuffle_enabled:
+                                game_manager.check_game_over()
+                            game_manager.start_reaction_window(discarded.rank, game_manager.current_player_index, discarded)
                             turn_end_timer = ANIM_DISCARD_DURATION + 0.1
                             status_message = ""
 
@@ -414,6 +493,21 @@ def main():
                             pair_opponent_give_slot = None
                             selected_slot = None
                             status_message = "Click YOUR card to give away"
+
+                        elif clicked_btn == 'drop_self' and game_manager.state == GameState.REACTION_WINDOW:
+                            awaiting = 'react_drop_self'
+                            selected_slot = None
+                            status_message = "Click YOUR matching card to drop"
+
+                        elif clicked_btn == 'drop_opponent' and game_manager.state == GameState.REACTION_WINDOW:
+                            awaiting = 'react_drop_opp_give'
+                            react_give_slot = None
+                            status_message = "Click YOUR card to give in exchange"
+
+                        elif clicked_btn == 'pass_reaction' and game_manager.state == GameState.REACTION_WINDOW:
+                            game_manager.end_reaction_window()
+                            awaiting = None
+                            status_message = ""
 
                     else:
                         if awaiting is not None:
@@ -580,6 +674,99 @@ def main():
                                             continue
                                         break
 
+                            elif awaiting == 'self_pair_first':
+                                if human_idx is not None:
+                                    rects = renderer.get_card_rects(human_idx, game_manager)
+                                    for slot_idx, rect in enumerate(rects):
+                                        if rect.collidepoint(mouse_pos) and game_manager.players[human_idx].hand[slot_idx] is not None:
+                                            if slot_idx in game_manager.players[human_idx].known_cards:
+                                                selected_slot = slot_idx
+                                                awaiting = 'self_pair_second'
+                                                status_message = "Click second card to self-pair"
+                                            break
+
+                            elif awaiting == 'self_pair_second':
+                                if human_idx is not None and selected_slot is not None:
+                                    rects = renderer.get_card_rects(human_idx, game_manager)
+                                    for slot_idx, rect in enumerate(rects):
+                                        if rect.collidepoint(mouse_pos) and slot_idx != selected_slot and game_manager.players[human_idx].hand[slot_idx] is not None:
+                                            if slot_idx in game_manager.players[human_idx].known_cards:
+                                                card_a = game_manager.players[human_idx].known_cards.get(selected_slot)
+                                                card_b = game_manager.players[human_idx].known_cards.get(slot_idx)
+                                                if card_a and card_b and card_a.rank == card_b.rank:
+                                                    pos_a = renderer.get_card_center(human_idx, selected_slot, game_manager)
+                                                    pos_b = renderer.get_card_center(human_idx, slot_idx, game_manager)
+                                                    renderer.push_pair_fly_animation(game_manager, pos_a, game_manager.players[human_idx].hand[selected_slot], pos_b, game_manager.players[human_idx].hand[slot_idx])
+                                                    result = game_manager.execute_self_pair_action(selected_slot, slot_idx)
+                                                    if not result.get('success', True) is False:
+                                                        game_manager.check_game_over()
+                                                    awaiting = None
+                                                    selected_slot = None
+                                                    status_message = ""
+                                                    turn_end_timer = ANIM_PAIR_FLY_DURATION + 0.1
+                                            break
+
+                            elif awaiting == 'react_drop_self':
+                                if human_idx is not None and game_manager.state == GameState.REACTION_WINDOW:
+                                    rects = renderer.get_card_rects(human_idx, game_manager)
+                                    for slot_idx, rect in enumerate(rects):
+                                        if rect.collidepoint(mouse_pos) and game_manager.players[human_idx].hand[slot_idx] is not None:
+                                            result = game_manager.attempt_reactive_drop_self(human_idx, slot_idx)
+                                            if result.get('success'):
+                                                pos = renderer.get_card_center(human_idx, slot_idx, game_manager)
+                                                renderer.push_pair_fly_animation(game_manager, pos, result['result']['card'])
+                                                game_manager.check_game_over()
+                                                awaiting = None
+                                                status_message = ""
+                                                turn_end_timer = ANIM_REACTIVE_DROP_DURATION + 0.1
+                                            else:
+                                                awaiting = None
+                                                status_message = "Wrong card! Penalty drawn."
+                                                game_manager.end_reaction_window()
+                                                turn_end_timer = ANIM_PENALTY_DRAW_DURATION + 0.2
+                                            break
+
+                            elif awaiting == 'react_drop_opp_give':
+                                if human_idx is not None:
+                                    rects = renderer.get_card_rects(human_idx, game_manager)
+                                    for slot_idx, rect in enumerate(rects):
+                                        if rect.collidepoint(mouse_pos) and game_manager.players[human_idx].hand[slot_idx] is not None:
+                                            react_give_slot = slot_idx
+                                            awaiting = 'react_drop_opp_target'
+                                            status_message = "Click OPPONENT's matching card"
+                                            break
+
+                            elif awaiting == 'react_drop_opp_target':
+                                if human_idx is not None and react_give_slot is not None:
+                                    for player in game_manager.players:
+                                        if player.is_human or player.seat_index == game_manager.reaction_source_player:
+                                            continue
+                                        rects = renderer.get_card_rects(player.seat_index, game_manager)
+                                        for slot_idx, rect in enumerate(rects):
+                                            if rect.collidepoint(mouse_pos) and player.hand[slot_idx] is not None:
+                                                result = game_manager.attempt_reactive_drop_opponent(
+                                                    human_idx, player.seat_index, slot_idx, react_give_slot
+                                                )
+                                                if result.get('success'):
+                                                    opp_pos = renderer.get_card_center(player.seat_index, slot_idx, game_manager)
+                                                    give_pos = renderer.get_card_center(human_idx, react_give_slot, game_manager)
+                                                    renderer.push_pair_fly_animation(game_manager, opp_pos, result['result'].get('opponent_card'), give_pos, None)
+                                                    game_manager.check_game_over()
+                                                    awaiting = None
+                                                    react_give_slot = None
+                                                    status_message = ""
+                                                    turn_end_timer = ANIM_REACTIVE_DROP_DURATION + 0.1
+                                                else:
+                                                    awaiting = None
+                                                    react_give_slot = None
+                                                    status_message = "Wrong call! Penalty drawn."
+                                                    game_manager.end_reaction_window()
+                                                    turn_end_timer = ANIM_PENALTY_DRAW_DURATION + 0.2
+                                                break
+                                        else:
+                                            continue
+                                        break
+
                         else:
                             human_player = game_manager.players[human_idx]
                             if human_idx is not None and cp.is_human and dragging_slot is None:
@@ -625,149 +812,199 @@ def main():
 
         if current_screen == "game" and game_manager is not None:
             cp = game_manager.current_player()
-            if not cp.is_human and turn_end_timer <= 0:
+
+            if game_manager.state == GameState.REACTION_WINDOW and not cp.is_human:
                 if renderer.is_animating():
-                    continue
-                ai_timer += dt
-                ai_idx = cp.seat_index
-
-                if ai_phase == 'idle':
-                    ai_phase = 'drawing'
-                    ai_timer = 0.0
-
-                if ai_phase == 'drawing' and ai_timer >= game_settings.ai_delay:
-                    should_declare = AIDecider(cp, {'players': game_manager.players}).should_declare()
-                    if should_declare:
-                        game_manager.execute_player_action("declare", {})
-                        game_manager.resolve_declaration()
-                        game_over_result = game_manager.declaration_result
-                        current_screen = "game_over"
-                        ai_phase = 'idle'
-                        ai_timer = 0
-                        continue
-                    game_manager.draw_card()
-                    renderer.push_draw_animation(game_manager)
-                    ai_phase = 'acting'
-                    ai_timer = 0.0
-
-                if ai_phase == 'acting' and ai_timer >= 0.5:
-                    ai = AIDecider(cp, {'players': game_manager.players})
-                    drawn = game_manager.drawn_card
-                    if drawn:
-                        decision = ai.choose_action(drawn)
-                        action_key = decision['action']
-
-                        if action_key == 'play_power':
-                            target_info = _ai_power_target(ai, cp, game_manager.players, drawn)
-                            power = drawn.power
-
-                            if power in ('peek_self', 'peek_opponent'):
-                                game_manager.execute_player_action('play_power', {
-                                    'card': drawn,
-                                    'target_info': target_info,
-                                })
-                                if power == 'peek_self' and target_info:
-                                    slot = target_info.get('slot', 0)
-                                    if cp.hand[slot] is not None:
-                                        cp.known_cards[slot] = cp.hand[slot]
-                                    renderer.push_ai_peek_animation(ai_idx, slot, game_manager)
-                                elif power == 'peek_opponent' and target_info:
-                                    p_idx = target_info.get('player_index', 0)
-                                    s_idx = target_info.get('slot', 0)
-                                    target_p = next((p for p in game_manager.players if p.seat_index == p_idx), None)
-                                    if target_p and target_p.hand[s_idx] is not None:
-                                        cp.known_opponent_cards[(p_idx, s_idx)] = target_p.hand[s_idx]
-                                    renderer.push_ai_peek_animation(p_idx, s_idx, game_manager)
-
-                            elif power == 'skip':
-                                game_manager.execute_player_action('play_power', {
-                                    'card': drawn,
-                                    'target_info': target_info,
-                                })
-                                game_manager.skip_next = True
-                                renderer.push_ai_skip_animation(game_manager, ai_idx)
-
-                            elif power in ('unseen_swap', 'seen_swap'):
-                                my_slot = target_info.get('my_slot', 0)
-                                target_player_idx = target_info.get('target_player', 0)
-                                their_slot = target_info.get('their_slot', 0)
-                                their_card_before = None
-                                if power == 'seen_swap':
-                                    target_p = next((p for p in game_manager.players if p.seat_index == target_player_idx), None)
-                                    if target_p:
-                                        their_card_before = target_p.hand[their_slot]
-                                my_pos = renderer.get_card_center(ai_idx, my_slot, game_manager)
-                                their_pos = renderer.get_card_center(target_player_idx, their_slot, game_manager)
-                                game_manager.execute_player_action('play_power', {
-                                    'card': drawn,
-                                    'target_info': target_info,
-                                })
-                                if power == 'seen_swap':
-                                    renderer.push_seen_swap_animation(
-                                        game_manager, my_slot, target_player_idx, their_slot,
-                                        their_card_before,
+                    pass
+                else:
+                    for ai_p in game_manager.players:
+                        if ai_p.is_human:
+                            continue
+                        ai_decider = AIDecider(ai_p, {'players': game_manager.players})
+                        if game_manager.reaction_rank:
+                            reaction = ai_decider.should_react_to_discard(game_manager.reaction_rank)
+                            if reaction:
+                                if reaction['type'] == 'react_drop_self':
+                                    result = game_manager.attempt_reactive_drop_self(ai_p.seat_index, reaction['slot'])
+                                    if result.get('success'):
+                                        pos = renderer.get_card_center(ai_p.seat_index, reaction['slot'], game_manager)
+                                        renderer.push_ai_pair_animation(game_manager, pos)
+                                        game_manager.check_game_over()
+                                elif reaction['type'] == 'react_drop_opponent':
+                                    result = game_manager.attempt_reactive_drop_opponent(
+                                        ai_p.seat_index,
+                                        reaction['opponent_index'],
+                                        reaction['opponent_slot'],
+                                        reaction['give_slot'],
                                     )
+                                    if result.get('success'):
+                                        opp_pos = renderer.get_card_center(reaction['opponent_index'], reaction['opponent_slot'], game_manager)
+                                        renderer.push_ai_pair_animation(game_manager, opp_pos)
+                                        game_manager.check_game_over()
+                        break
+                    game_manager.end_reaction_window()
+
+            elif not cp.is_human and turn_end_timer <= 0 and game_manager.state != GameState.REACTION_WINDOW:
+                if renderer.is_animating():
+                    pass
+                else:
+                    ai_timer += dt
+                    ai_idx = cp.seat_index
+
+                    if game_settings.self_pair_enabled:
+                        ai_decider_check = AIDecider(cp, {'players': game_manager.players})
+                        pairs = ai_decider_check.should_self_pair()
+                        if pairs:
+                            slot_a, slot_b = pairs[0]
+                            pos_a = renderer.get_card_center(ai_idx, slot_a, game_manager)
+                            pos_b = renderer.get_card_center(ai_idx, slot_b, game_manager)
+                            renderer.push_ai_pair_animation(game_manager, pos_a, pos_b)
+                            game_manager.execute_self_pair_action(slot_a, slot_b)
+                            game_manager.check_game_over()
+
+                    if game_settings.shuffle_enabled:
+                        ai_decider_check = AIDecider(cp, {'players': game_manager.players})
+                        if ai_decider_check.should_shuffle():
+                            game_manager.shuffle_player_hand(ai_idx)
+
+                    if ai_phase == 'idle':
+                        ai_phase = 'drawing'
+                        ai_timer = 0.0
+
+                    if ai_phase == 'drawing' and ai_timer >= game_settings.ai_delay:
+                        should_declare = AIDecider(cp, {'players': game_manager.players}).should_declare()
+                        if should_declare:
+                            game_manager.execute_player_action("declare", {})
+                            game_manager.resolve_declaration()
+                            game_over_result = game_manager.declaration_result
+                            current_screen = "game_over"
+                            ai_phase = 'idle'
+                            ai_timer = 0
+                            continue
+                        game_manager.draw_card()
+                        renderer.push_draw_animation(game_manager)
+                        ai_phase = 'acting'
+                        ai_timer = 0.0
+
+                    if ai_phase == 'acting' and ai_timer >= 0.5:
+                        ai = AIDecider(cp, {'players': game_manager.players})
+                        drawn = game_manager.drawn_card
+                        if drawn:
+                            decision = ai.choose_action(drawn)
+                            action_key = decision['action']
+
+                            if action_key == 'play_power':
+                                target_info = _ai_power_target(ai, cp, game_manager.players, drawn)
+                                power = drawn.power
+
+                                if power in ('peek_self', 'peek_opponent'):
+                                    game_manager.execute_player_action('play_power', {
+                                        'card': drawn,
+                                        'target_info': target_info,
+                                    })
+                                    if power == 'peek_self' and target_info:
+                                        slot = target_info.get('slot', 0)
+                                        if cp.hand[slot] is not None:
+                                            cp.known_cards[slot] = cp.hand[slot]
+                                        renderer.push_ai_peek_animation(ai_idx, slot, game_manager)
+                                    elif power == 'peek_opponent' and target_info:
+                                        p_idx = target_info.get('player_index', 0)
+                                        s_idx = target_info.get('slot', 0)
+                                        target_p = next((p for p in game_manager.players if p.seat_index == p_idx), None)
+                                        if target_p and target_p.hand[s_idx] is not None:
+                                            cp.known_opponent_cards[(p_idx, s_idx)] = target_p.hand[s_idx]
+                                        renderer.push_ai_peek_animation(p_idx, s_idx, game_manager)
+
+                                elif power == 'skip':
+                                    game_manager.execute_player_action('play_power', {
+                                        'card': drawn,
+                                        'target_info': target_info,
+                                    })
+                                    game_manager.skip_next = True
+                                    renderer.push_ai_skip_animation(game_manager, ai_idx)
+
+                                elif power in ('unseen_swap', 'seen_swap'):
+                                    my_slot = target_info.get('my_slot', 0)
+                                    target_player_idx = target_info.get('target_player', 0)
+                                    their_slot = target_info.get('their_slot', 0)
+                                    their_card_before = None
+                                    if power == 'seen_swap':
+                                        target_p = next((p for p in game_manager.players if p.seat_index == target_player_idx), None)
+                                        if target_p:
+                                            their_card_before = target_p.hand[their_slot]
+                                    my_pos = renderer.get_card_center(ai_idx, my_slot, game_manager)
+                                    their_pos = renderer.get_card_center(target_player_idx, their_slot, game_manager)
+                                    game_manager.execute_player_action('play_power', {
+                                        'card': drawn,
+                                        'target_info': target_info,
+                                    })
+                                    if power == 'seen_swap':
+                                        renderer.push_seen_swap_animation(
+                                            game_manager, my_slot, target_player_idx, their_slot,
+                                            their_card_before,
+                                        )
+                                    else:
+                                        renderer.push_unseen_swap_animation(
+                                            game_manager, my_slot, target_player_idx, their_slot,
+                                        )
+
                                 else:
-                                    renderer.push_unseen_swap_animation(
-                                        game_manager, my_slot, target_player_idx, their_slot,
-                                    )
+                                    game_manager.execute_player_action('play_power', {
+                                        'card': drawn,
+                                        'target_info': target_info,
+                                    })
 
-                            else:
-                                game_manager.execute_player_action('play_power', {
-                                    'card': drawn,
-                                    'target_info': target_info,
+                            elif action_key == 'swap':
+                                slot = decision.get('target_slot', ai.estimate_worst_slot())
+                                renderer.push_ai_swap_animation(game_manager, ai_idx, slot)
+                                game_manager.execute_player_action('swap', {
+                                    'my_slot': slot,
+                                    'drawn_card': drawn,
                                 })
 
-                        elif action_key == 'swap':
-                            slot = decision.get('target_slot', ai.estimate_worst_slot())
-                            renderer.push_ai_swap_animation(game_manager, ai_idx, slot)
-                            game_manager.execute_player_action('swap', {
-                                'my_slot': slot,
-                                'drawn_card': drawn,
-                            })
+                            elif action_key == 'discard':
+                                renderer.push_discard_animation(game_manager)
+                                game_manager.execute_player_action('discard', {'drawn_card': drawn})
+                                game_manager.start_reaction_window(drawn.rank, ai_idx, drawn)
 
-                        elif action_key == 'discard':
-                            renderer.push_discard_animation(game_manager)
-                            game_manager.execute_player_action('discard', {'drawn_card': drawn})
+                            elif action_key == 'pair_own':
+                                slot = decision.get('target_slot', 0)
+                                pair_pos = renderer.get_card_center(ai_idx, slot, game_manager)
+                                drawn_pos = DRAWN_CARD_POS
+                                renderer.push_ai_pair_animation(game_manager, pair_pos, drawn_pos)
+                                game_manager.execute_player_action('pair_own', {
+                                    'player_slot': slot,
+                                    'drawn_card': drawn,
+                                })
 
-                        elif action_key == 'pair_own':
-                            slot = decision.get('target_slot', 0)
-                            pair_pos = renderer.get_card_center(ai_idx, slot, game_manager)
-                            drawn_pos = DRAWN_CARD_POS
-                            renderer.push_ai_pair_animation(game_manager, pair_pos, drawn_pos)
-                            game_manager.execute_player_action('pair_own', {
-                                'player_slot': slot,
-                                'drawn_card': drawn,
-                            })
+                            elif action_key == 'pair_opponent':
+                                give_slot = ai.choose_card_to_give()
+                                opp_slot = _find_opponent_slot(cp, game_manager.players, decision['target_player'], drawn.rank)
+                                opp_idx = decision.get('target_player', 0)
+                                opp_pos = renderer.get_card_center(opp_idx, opp_slot, game_manager)
+                                give_pos = renderer.get_card_center(ai_idx, give_slot, game_manager)
+                                renderer.push_ai_pair_animation(game_manager, opp_pos, give_pos)
+                                game_manager.execute_player_action('pair_opponent', {
+                                    'opponent_index': decision['target_player'],
+                                    'opponent_slot': opp_slot,
+                                    'drawn_card': drawn,
+                                    'give_slot': give_slot,
+                                })
 
-                        elif action_key == 'pair_opponent':
-                            give_slot = ai.choose_card_to_give()
-                            opp_slot = _find_opponent_slot(cp, game_manager.players, decision['target_player'], drawn.rank)
-                            opp_idx = decision.get('target_player', 0)
-                            opp_pos = renderer.get_card_center(opp_idx, opp_slot, game_manager)
-                            give_pos = renderer.get_card_center(ai_idx, give_slot, game_manager)
-                            renderer.push_ai_pair_animation(game_manager, opp_pos, give_pos)
-                            game_manager.execute_player_action('pair_opponent', {
-                                'opponent_index': decision['target_player'],
-                                'opponent_slot': opp_slot,
-                                'drawn_card': drawn,
-                                'give_slot': give_slot,
-                            })
+                        ai_phase = 'ending'
+                        ai_timer = 0.0
 
-                    ai_phase = 'ending'
-                    ai_timer = 0.0
-
-                if ai_phase == 'ending' and ai_timer >= 0.3:
-                    game_manager.end_turn()
-                    ai_phase = 'idle'
-                    ai_timer = 0.0
-                    awaiting = None
-                    selected_slot = None
-                    pair_opponent_give_slot = None
-                    status_message = ""
-                    if game_manager.state == GameState.GAME_OVER:
-                        game_over_result = game_manager.declaration_result
-                        current_screen = "game_over"
+                    if ai_phase == 'ending' and ai_timer >= 0.3:
+                        game_manager.end_turn()
+                        ai_phase = 'idle'
+                        ai_timer = 0.0
+                        awaiting = None
+                        selected_slot = None
+                        pair_opponent_give_slot = None
+                        status_message = ""
+                        if game_manager.state == GameState.GAME_OVER:
+                            game_over_result = game_manager.declaration_result
+                            current_screen = "game_over"
 
         if current_screen == "game" and game_manager is not None:
             if game_manager.state == GameState.GAME_OVER:
@@ -814,11 +1051,43 @@ def main():
                 current_screen = "menu"
             else:
                 cp = game_manager.current_player()
-                action_buttons = _build_action_buttons(game_manager, ui_font) if cp.is_human else {}
+                action_buttons = _build_action_buttons(game_manager, ui_font, game_settings) if cp.is_human or game_manager.state == GameState.REACTION_WINDOW else {}
+
+                if game_manager.state == GameState.REACTION_WINDOW:
+                    human_idx = _get_human_index(game_manager)
+                    if human_idx is not None:
+                        action_buttons = _build_action_buttons(game_manager, ui_font, game_settings)
+
                 cancel_btn = None
                 if awaiting is not None and cp.is_human:
                     cancel_btn = _build_cancel_button("Cancel", ui_font)
                 renderer.draw(game_manager, mouse_pos, action_buttons, cancel_btn, status_message, awaiting)
+
+                if game_settings and game_settings.shuffle_enabled and cp.is_human and human_idx is not None:
+                    num_players = len(game_manager.players)
+                    seat_pos = _get_seat_position(human_idx, num_players)
+                    shuffle_btn = _build_shuffle_button(game_manager.players[human_idx], seat_pos, ui_font)
+                    hovered = shuffle_btn['rect'].collidepoint(mouse_pos)
+                    color = shuffle_btn['hover_color'] if hovered else shuffle_btn['color']
+                    pygame.draw.rect(screen, color, shuffle_btn['rect'], border_radius=6)
+                    pygame.draw.rect(screen, (30, 30, 35), shuffle_btn['rect'], 1, border_radius=6)
+                    btn_font = shuffle_btn['font']
+                    text_surf = btn_font.render(shuffle_btn['text'], True, TEXT_WHITE)
+                    text_rect = text_surf.get_rect(center=shuffle_btn['rect'].center)
+                    screen.blit(text_surf, text_rect)
+
+                if game_manager.state == GameState.REACTION_WINDOW:
+                    font = pygame.font.SysFont("arial", 28, bold=True)
+                    remaining = max(0, game_manager.reaction_timer)
+                    banner_text = f"REACTION! Drop a {game_manager.reaction_rank}? ({remaining:.1f}s)"
+                    banner_surf = font.render(banner_text, True, GOLD)
+                    banner_rect = banner_surf.get_rect(center=(SCREEN_WIDTH // 2, STATUS_BAR_H + 30))
+                    bg_rect = banner_rect.inflate(40, 16)
+                    bg_surf = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
+                    pygame.draw.rect(bg_surf, (0, 0, 0, 200), bg_surf.get_rect(), border_radius=10)
+                    pygame.draw.rect(bg_surf, (*GOLD, 120), bg_surf.get_rect(), 2, border_radius=10)
+                    screen.blit(bg_surf, bg_rect.topleft)
+                    screen.blit(banner_surf, banner_rect)
 
         elif current_screen == "game_over":
             if game_over_result is None and game_manager:

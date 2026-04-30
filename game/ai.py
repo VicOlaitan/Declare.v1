@@ -67,6 +67,72 @@ class AIDecider:
             'log_message': f"{self.player.name} discarded {drawn_card.display_name}",
         }
 
+    def should_self_pair(self) -> list | None:
+        pairs = self.player.find_self_pairs()
+        if pairs:
+            return pairs
+        return None
+
+    def should_react_to_discard(self, discarded_rank: str) -> dict | None:
+        own_matches = []
+        for slot in self.player.get_active_slots():
+            if slot in self.player.known_cards and self.player.known_cards[slot].rank == discarded_rank:
+                own_matches.append(slot)
+
+        if own_matches:
+            difficulty = self.player.difficulty
+            react_chance = {'easy': 0.4, 'medium': 0.75, 'normal': 0.75, 'hard': 0.95}
+            if random.random() < react_chance.get(difficulty, 0.75):
+                best_slot = max(own_matches, key=lambda s: self.player.known_cards[s].value)
+                return {
+                    'type': 'react_drop_self',
+                    'slot': best_slot,
+                }
+            return None
+
+        players = self.game_state.get('players', [])
+        for opp in players:
+            if opp.seat_index == self.player.seat_index:
+                continue
+            opp_matches = []
+            for slot in opp.get_active_slots():
+                if (opp.seat_index, slot) in self.player.known_opponent_cards:
+                    if self.player.known_opponent_cards[(opp.seat_index, slot)].rank == discarded_rank:
+                        opp_matches.append((opp.seat_index, slot))
+
+            if opp_matches:
+                difficulty = self.player.difficulty
+                react_chance = {'easy': 0.2, 'medium': 0.5, 'normal': 0.5, 'hard': 0.8}
+                if random.random() < react_chance.get(difficulty, 0.5):
+                    opp_idx, opp_slot = opp_matches[0]
+                    give_slot = self.choose_card_to_give()
+                    return {
+                        'type': 'react_drop_opponent',
+                        'opponent_index': opp_idx,
+                        'opponent_slot': opp_slot,
+                        'give_slot': give_slot,
+                    }
+
+        return None
+
+    def should_shuffle(self) -> bool:
+        known_by_others = 0
+        players = self.game_state.get('players', [])
+        for opp in players:
+            if opp.seat_index == self.player.seat_index:
+                continue
+            for key, card in opp.known_opponent_cards.items():
+                if key[0] == self.player.seat_index:
+                    known_by_others += 1
+
+        if known_by_others == 0:
+            return False
+
+        difficulty = self.player.difficulty
+        shuffle_thresholds = {'easy': 3, 'medium': 2, 'normal': 2, 'hard': 1}
+        threshold = shuffle_thresholds.get(difficulty, 2)
+        return known_by_others >= threshold
+
     def _slot_estimated_value(self, slot_idx: int) -> int:
         if slot_idx in self.player.known_cards:
             return self.player.known_cards[slot_idx].value

@@ -15,6 +15,8 @@ class Player:
         self.is_declaring: bool = False
         self.layout_mode: str = 'line'
         self.card_positions: dict = {}
+        self.received_card_slot: int | None = None
+        self.received_card_until: float = 0.0
 
     @property
     def has_zero_cards(self) -> bool:
@@ -49,6 +51,47 @@ class Player:
 
     def get_active_slots(self) -> list:
         return [i for i, slot in enumerate(self.hand) if slot is not None]
+
+    def find_self_pairs(self) -> list:
+        pairs = []
+        known_slots = {s: c for s, c in self.known_cards.items() if self.hand[s] is not None}
+        checked = set()
+        for s1, c1 in known_slots.items():
+            if s1 in checked:
+                continue
+            for s2, c2 in known_slots.items():
+                if s2 <= s1 or s2 in checked:
+                    continue
+                if c1.rank == c2.rank:
+                    pairs.append((s1, s2))
+                    checked.add(s1)
+                    checked.add(s2)
+                    break
+        return pairs
+
+    def shuffle_hand(self, all_players: list):
+        active_slots = self.get_active_slots()
+        active_cards = [self.hand[s] for s in active_slots]
+        random.shuffle(active_cards)
+        new_hand = [None] * len(self.hand)
+        for i, slot in enumerate(active_slots):
+            new_hand[slot] = active_cards[i]
+        self.hand = new_hand
+        self.known_cards.clear()
+        for p in all_players:
+            if p.seat_index != self.seat_index:
+                p.known_opponent_cards = {
+                    k: v for k, v in p.known_opponent_cards.items()
+                    if k[0] != self.seat_index
+                }
+
+    def add_penalty_card(self, card: Card) -> int | None:
+        for i in range(len(self.hand)):
+            if self.hand[i] is None:
+                self.hand[i] = card
+                self.known_cards[i] = card
+                return i
+        return None
 
     def reset_targeting_state(self):
         pass
