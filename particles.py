@@ -9,6 +9,8 @@ import math
 import random
 import pygame
 
+from config import S
+
 
 MAX_PARTICLES = 400
 
@@ -105,55 +107,55 @@ class ParticleSystem:
     def burst_pair(self, x, y, color=(232, 195, 110), n=18):
         for _ in range(n):
             angle = random.uniform(0, math.pi * 2)
-            speed = random.uniform(120, 320)
+            speed = random.uniform(S(120), S(320))
             self.particles.append(Particle(
                 x, y,
                 math.cos(angle) * speed,
                 math.sin(angle) * speed,
                 life=random.uniform(0.4, 0.7),
                 color=color,
-                size=random.uniform(2.5, 4.5),
-                ay=300,
+                size=random.uniform(S(2.5), S(4.5)),
+                ay=S(300),
                 kind="spark",
                 drag=0.9,
             ))
         self.particles.append(Particle(
             x, y, 0, 0,
-            life=0.5, color=color, size=20, kind="ring", drag=1.0,
+            life=0.5, color=color, size=S(20), kind="ring", drag=1.0,
         ))
 
     def burst_declare(self, x, y, color=(232, 195, 110), n=40):
         for _ in range(n):
             angle = random.uniform(0, math.pi * 2)
-            speed = random.uniform(60, 220)
+            speed = random.uniform(S(60), S(220))
             self.particles.append(Particle(
                 x, y,
                 math.cos(angle) * speed,
                 math.sin(angle) * speed,
                 life=random.uniform(0.8, 1.4),
                 color=color,
-                size=random.uniform(2, 5),
-                ay=180,
+                size=random.uniform(S(2), S(5)),
+                ay=S(180),
                 kind="spark",
                 drag=0.92,
             ))
         self.particles.append(Particle(
             x, y, 0, 0,
-            life=0.9, color=color, size=30, kind="ring", drag=1.0,
+            life=0.9, color=color, size=S(30), kind="ring", drag=1.0,
         ))
 
     def burst_penalty(self, x, y, color=(212, 72, 72), n=16):
         for _ in range(n):
             angle = random.uniform(-math.pi, 0)
-            speed = random.uniform(140, 280)
+            speed = random.uniform(S(140), S(280))
             self.particles.append(Particle(
                 x, y,
                 math.cos(angle) * speed,
                 math.sin(angle) * speed,
                 life=random.uniform(0.5, 0.9),
                 color=color,
-                size=random.uniform(2, 4),
-                ay=420,
+                size=random.uniform(S(2), S(4)),
+                ay=S(420),
                 kind="ember",
                 drag=0.88,
             ))
@@ -161,17 +163,17 @@ class ParticleSystem:
     def burst_achievement(self, x, y, color=(255, 240, 180), n=24):
         for _ in range(n):
             angle = random.uniform(0, math.pi * 2)
-            radius = random.uniform(20, 60)
+            radius = random.uniform(S(20), S(60))
             ex = x + math.cos(angle) * radius
             ey = y + math.sin(angle) * radius
             self.particles.append(Particle(
                 ex, ey,
-                math.cos(angle) * 30,
-                math.sin(angle) * 30 - 60,
+                math.cos(angle) * S(30),
+                math.sin(angle) * S(30) - S(60),
                 life=random.uniform(0.8, 1.6),
                 color=color,
-                size=random.uniform(3, 5),
-                ay=80,
+                size=random.uniform(S(3), S(5)),
+                ay=S(80),
                 kind="shimmer",
                 drag=0.94,
             ))
@@ -179,33 +181,33 @@ class ParticleSystem:
     def burst_power(self, x, y, color=(111, 207, 227), n=14):
         for _ in range(n):
             angle = random.uniform(0, math.pi * 2)
-            speed = random.uniform(80, 200)
+            speed = random.uniform(S(80), S(200))
             self.particles.append(Particle(
                 x, y,
                 math.cos(angle) * speed,
                 math.sin(angle) * speed,
                 life=random.uniform(0.5, 0.9),
                 color=color,
-                size=random.uniform(2, 4),
-                ay=120,
+                size=random.uniform(S(2), S(4)),
+                ay=S(120),
                 kind="spark",
                 drag=0.92,
             ))
         self.particles.append(Particle(
             x, y, 0, 0,
-            life=0.6, color=color, size=18, kind="ring", drag=1.0,
+            life=0.6, color=color, size=S(18), kind="ring", drag=1.0,
         ))
 
     def trail(self, x, y, vx=0, vy=0, color=(232, 195, 110)):
         self.particles.append(Particle(
-            x + random.uniform(-2, 2),
-            y + random.uniform(-2, 2),
-            vx * 0.2 + random.uniform(-20, 20),
-            vy * 0.2 + random.uniform(-30, -10),
+            x + random.uniform(-S(2), S(2)),
+            y + random.uniform(-S(2), S(2)),
+            vx * 0.2 + random.uniform(-S(20), S(20)),
+            vy * 0.2 + random.uniform(-S(30), -S(10)),
             life=random.uniform(0.3, 0.5),
             color=color,
-            size=random.uniform(1.5, 3),
-            ay=80,
+            size=random.uniform(S(1.5), S(3)),
+            ay=S(80),
             kind="dot",
             drag=0.9,
         ))
@@ -214,13 +216,13 @@ class ParticleSystem:
         if random.random() < 0.04:
             self.particles.append(Particle(
                 random.uniform(0, screen_w),
-                screen_h + 5,
-                random.uniform(-6, 6),
-                random.uniform(-25, -10),
+                screen_h + S(5),
+                random.uniform(-S(6), S(6)),
+                random.uniform(-S(25), -S(10)),
                 life=random.uniform(2.5, 4.0),
                 color=color,
-                size=random.uniform(0.8, 1.4),
-                ay=-2,
+                size=random.uniform(S(0.8), S(1.4)),
+                ay=-S(2),
                 kind="dot",
                 drag=0.99,
             ))

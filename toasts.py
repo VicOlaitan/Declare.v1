@@ -8,7 +8,7 @@ import pygame
 from collections import deque
 
 import theme
-from config import SCREEN_WIDTH
+from config import SCREEN_WIDTH, S
 
 
 class Toast:
@@ -38,7 +38,7 @@ class Toast:
         if self._age >= 0.25:
             return 0.0
         t = max(0.0, 1.0 - self._age / 0.25)
-        return 200.0 * (t ** 2)
+        return float(S(200)) * (t ** 2)
 
     @property
     def expired(self):
@@ -55,8 +55,8 @@ class ToastManager:
     def _ensure_fonts(self):
         if self._font is None:
             import typography as typo
-            self._font = typo.body_bold(18)
-            self._small_font = typo.body(14)
+            self._font = typo.body_bold(S(18))
+            self._small_font = typo.body(S(14))
 
     def push(self, text, kind="info", icon=None, life=2.4):
         toast = Toast(text=text, kind=kind, icon=icon, life=life)
@@ -75,16 +75,16 @@ class ToastManager:
             return
         self._ensure_fonts()
         t = theme.active()
-        margin = 18
-        spacing = 8
+        margin = S(18)
+        spacing = S(8)
         x_right = SCREEN_WIDTH - margin
-        y_cursor = margin + 50
+        y_cursor = margin + S(50)
 
         for toast in list(self.toasts):
             text_surf = self._font.render(toast.text, True, t.text_white)
             tw = text_surf.get_width()
-            box_w = tw + 56
-            box_h = 44
+            box_w = tw + S(56)
+            box_h = S(44)
             slide = toast.slide_in()
             box_x = x_right - box_w + int(slide)
             box_y = y_cursor
@@ -98,16 +98,16 @@ class ToastManager:
             kind_color = self._kind_color(toast.kind, t)
             pygame.draw.rect(
                 box_surf, (*t.panel_bg, box_alpha),
-                box_surf.get_rect(), border_radius=8,
+                box_surf.get_rect(), border_radius=S(8),
             )
-            stripe = pygame.Rect(0, 0, 4, box_h)
+            stripe = pygame.Rect(0, 0, S(4), box_h)
             pygame.draw.rect(
                 box_surf, (*kind_color, box_alpha),
-                stripe, border_radius=2,
+                stripe, border_radius=S(2),
             )
             pygame.draw.rect(
                 box_surf, (*t.panel_border, box_alpha),
-                box_surf.get_rect(), 1, border_radius=8,
+                box_surf.get_rect(), max(1, S(1)), border_radius=S(8),
             )
             screen.blit(box_surf, (box_x, box_y))
 
@@ -115,10 +115,10 @@ class ToastManager:
                 icon_color = (*kind_color, int(255 * toast.alpha()))
                 icon_surf = self._font.render(toast.icon, True, kind_color)
                 icon_surf.set_alpha(int(255 * toast.alpha()))
-                screen.blit(icon_surf, (box_x + 16, box_y + 12))
+                screen.blit(icon_surf, (box_x + S(16), box_y + S(12)))
 
             text_surf.set_alpha(int(255 * toast.alpha()))
-            screen.blit(text_surf, (box_x + 40, box_y + 12))
+            screen.blit(text_surf, (box_x + S(40), box_y + S(12)))
 
             y_cursor += box_h + spacing
 

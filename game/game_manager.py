@@ -157,7 +157,7 @@ class GameManager:
         elif action == "shuffle":
             pass
 
-        log_entry = self._format_action_log(action, details, result)
+        log_entry = self._format_log(action, details, result)
         self.game_log.append(log_entry)
         return result
 

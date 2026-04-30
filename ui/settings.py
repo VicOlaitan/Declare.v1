@@ -28,23 +28,24 @@ from config import (
     HAND_SIZE_OPTIONS, HAND_SIZE_LABELS,
     REACTION_WINDOW_OPTIONS, REACTION_WINDOW_LABELS,
     PEEK_COUNT_OPTIONS, PEEK_COUNT_LABELS,
+    S,
 )
 
 
 class SettingsMenu:
-    PANEL_W = 980
-    PANEL_H = 680
+    PANEL_W = S(980)
+    PANEL_H = S(680)
     PANEL_X = (SCREEN_WIDTH - PANEL_W) // 2
     PANEL_Y = (SCREEN_HEIGHT - PANEL_H) // 2
 
-    GEAR_X = SCREEN_WIDTH - 52
-    GEAR_Y = 8
-    GEAR_W = 40
-    GEAR_H = 34
+    GEAR_X = SCREEN_WIDTH - S(52)
+    GEAR_Y = S(8)
+    GEAR_W = S(40)
+    GEAR_H = S(34)
 
-    TAB_W = 165
-    TAB_H = 44
-    TAB_BAR_Y = 84
+    TAB_W = S(165)
+    TAB_H = S(44)
+    TAB_BAR_Y = S(84)
 
     AMBER = (220, 175, 60)
     AMBER_HI = (245, 200, 80)
@@ -63,10 +64,10 @@ class SettingsMenu:
         self.tab = "display"
         self.font = typo.body(UI_FONT_SIZE)
         self.small_font = typo.body(SMALL_FONT_SIZE)
-        self.tab_font = typo.body_bold(UI_FONT_SIZE - 1)
-        self.title_font = typo.display_bold(32)
-        self.section_font = typo.body_bold(14)
-        self.label_font = typo.body(16)
+        self.tab_font = typo.body_bold(UI_FONT_SIZE - S(1))
+        self.title_font = typo.display_bold(S(32))
+        self.section_font = typo.body_bold(S(14))
+        self.label_font = typo.body(S(16))
 
         self._hit = []
         self._tab_rects = {}
@@ -235,10 +236,10 @@ class SettingsMenu:
         self.screen.blit(overlay, (0, 0))
 
         panel_rect = pygame.Rect(self.PANEL_X, self.PANEL_Y, self.PANEL_W, self.PANEL_H)
-        shadow = pygame.Surface((self.PANEL_W + 16, self.PANEL_H + 16), pygame.SRCALPHA)
-        pygame.draw.rect(shadow, (0, 0, 0, 160), (8, 10, self.PANEL_W, self.PANEL_H),
-                         border_radius=14)
-        self.screen.blit(shadow, (self.PANEL_X - 8, self.PANEL_Y + 4))
+        shadow = pygame.Surface((self.PANEL_W + S(16), self.PANEL_H + S(16)), pygame.SRCALPHA)
+        pygame.draw.rect(shadow, (0, 0, 0, 160), (S(8), S(10), self.PANEL_W, self.PANEL_H),
+                         border_radius=S(14))
+        self.screen.blit(shadow, (self.PANEL_X - S(8), self.PANEL_Y + S(4)))
 
         panel = pygame.Surface((self.PANEL_W, self.PANEL_H), pygame.SRCALPHA)
         for i in range(self.PANEL_H):
@@ -252,35 +253,35 @@ class SettingsMenu:
         panel.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
         self.screen.blit(panel, panel_rect.topleft)
 
-        pygame.draw.rect(self.screen, th.brass_300, panel_rect, 2, border_radius=14)
+        pygame.draw.rect(self.screen, th.brass_300, panel_rect, max(1, S(2)), border_radius=S(14))
         pygame.draw.rect(self.screen, th.brass_900,
-                         panel_rect.inflate(-8, -8), 1, border_radius=12)
+                         panel_rect.inflate(-S(8), -S(8)), max(1, S(1)), border_radius=S(12))
         pygame.draw.line(self.screen, (255, 255, 255, 60),
-                         (panel_rect.left + 6, panel_rect.top + 3),
-                         (panel_rect.right - 6, panel_rect.top + 3), 1)
+                         (panel_rect.left + S(6), panel_rect.top + S(3)),
+                         (panel_rect.right - S(6), panel_rect.top + S(3)), max(1, S(1)))
 
-        for offset, alpha, col in ((3, 90, th.brass_900), (0, 255, th.brass_300)):
+        for offset, alpha, col in ((S(3), 90, th.brass_900), (0, 255, th.brass_300)):
             title = self.title_font.render("Settings", True, col)
             title.set_alpha(alpha)
             self.screen.blit(title, title.get_rect(
-                midtop=(panel_rect.centerx + offset, self.PANEL_Y + 20 + offset)))
+                midtop=(panel_rect.centerx + offset, self.PANEL_Y + S(20) + offset)))
 
-        flourish_y = self.PANEL_Y + 20 + self.title_font.get_height() + 6
+        flourish_y = self.PANEL_Y + S(20) + self.title_font.get_height() + S(6)
         cx = panel_rect.centerx
-        line_w = 130
+        line_w = S(130)
         pygame.draw.line(self.screen, th.brass_500,
-                         (cx - line_w, flourish_y), (cx - 16, flourish_y), 1)
+                         (cx - line_w, flourish_y), (cx - S(16), flourish_y), max(1, S(1)))
         pygame.draw.line(self.screen, th.brass_500,
-                         (cx + 16, flourish_y), (cx + line_w, flourish_y), 1)
+                         (cx + S(16), flourish_y), (cx + line_w, flourish_y), max(1, S(1)))
         pygame.draw.polygon(self.screen, th.brass_500,
-                            [(cx, flourish_y - 4), (cx - 8, flourish_y),
-                             (cx, flourish_y + 4), (cx + 8, flourish_y)])
+                            [(cx, flourish_y - S(4)), (cx - S(8), flourish_y),
+                             (cx, flourish_y + S(4)), (cx + S(8), flourish_y)])
 
         self._draw_tab_bar(mouse_pos)
 
-        content_top = self.PANEL_Y + self.TAB_BAR_Y + self.TAB_H + 24
-        content_left = self.PANEL_X + 30
-        content_right = self.PANEL_X + self.PANEL_W - 30
+        content_top = self.PANEL_Y + self.TAB_BAR_Y + self.TAB_H + S(24)
+        content_left = self.PANEL_X + S(30)
+        content_right = self.PANEL_X + self.PANEL_W - S(30)
 
         if self.tab == "display":
             self._draw_display(content_left, content_top, content_right, game_settings)
@@ -295,10 +296,10 @@ class SettingsMenu:
         elif self.tab == "profile":
             self._draw_profile(content_left, content_top, content_right, game_settings)
 
-        bw, bh = 180, 44
+        bw, bh = S(180), S(44)
         self._done_rect = pygame.Rect(
             self.PANEL_X + self.PANEL_W // 2 - bw // 2,
-            self.PANEL_Y + self.PANEL_H - bh - 18,
+            self.PANEL_Y + self.PANEL_H - bh - S(18),
             bw, bh,
         )
         hov = self._done_rect.collidepoint(mouse_pos)
@@ -315,18 +316,18 @@ class SettingsMenu:
         pygame.draw.rect(m, (255, 255, 255, 255), m.get_rect(), border_radius=10)
         plate.blit(m, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
         self.screen.blit(plate, self._done_rect.topleft)
-        pygame.draw.rect(self.screen, th.brass_900, self._done_rect, 2,
-                         border_radius=10)
+        pygame.draw.rect(self.screen, th.brass_900, self._done_rect, max(1, S(2)),
+                         border_radius=S(10))
         pygame.draw.line(self.screen, (255, 255, 255, 110),
-                         (self._done_rect.left + 6, self._done_rect.top + 2),
-                         (self._done_rect.right - 6, self._done_rect.top + 2), 1)
+                         (self._done_rect.left + S(6), self._done_rect.top + S(2)),
+                         (self._done_rect.right - S(6), self._done_rect.top + S(2)), max(1, S(1)))
         ds = self.tab_font.render("Done", True, th.brass_900)
         self.screen.blit(ds, ds.get_rect(center=self._done_rect.center))
 
         ai_hint = self.small_font.render("Esc to close  ·  ← → / Tab to switch tabs",
                                           True, TEXT_DIM)
         self.screen.blit(ai_hint, ai_hint.get_rect(midbottom=(panel_rect.centerx,
-                                                                self._done_rect.top - 10)))
+                                                                self._done_rect.top - S(10))))
 
     def _draw_tab_bar(self, mouse_pos):
         th = theme_mod.active()
@@ -334,7 +335,7 @@ class SettingsMenu:
         start_x = self.PANEL_X + (self.PANEL_W - total_w) // 2
         y = self.PANEL_Y + self.TAB_BAR_Y
         for i, (key, label) in enumerate(self.TABS):
-            r = pygame.Rect(start_x + i * self.TAB_W, y, self.TAB_W - 4, self.TAB_H)
+            r = pygame.Rect(start_x + i * self.TAB_W, y, self.TAB_W - S(4), self.TAB_H)
             self._tab_rects[key] = r
             active = (key == self.tab)
             hover = r.collidepoint(mouse_pos)
@@ -360,41 +361,41 @@ class SettingsMenu:
                 pygame.draw.line(plate, (rr, gg, bb, 255), (0, j), (r.width, j))
             mask = pygame.Surface((r.width, r.height), pygame.SRCALPHA)
             pygame.draw.rect(mask, (255, 255, 255, 255), mask.get_rect(),
-                             border_radius=8)
+                             border_radius=S(8))
             plate.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
             self.screen.blit(plate, r.topleft)
 
             border = th.brass_300 if active else th.brass_700
-            pygame.draw.rect(self.screen, border, r, 2 if active else 1,
-                             border_radius=8)
+            pygame.draw.rect(self.screen, border, r, max(1, S(2)) if active else max(1, S(1)),
+                             border_radius=S(8))
             if active:
                 pygame.draw.line(self.screen, (255, 255, 255, 90),
-                                 (r.left + 4, r.top + 2),
-                                 (r.right - 4, r.top + 2), 1)
+                                 (r.left + S(4), r.top + S(2)),
+                                 (r.right - S(4), r.top + S(2)), max(1, S(1)))
             ts = self.tab_font.render(label, True, text_color)
             self.screen.blit(ts, ts.get_rect(center=r.center))
 
     def _section(self, x, y, label):
         s = self.section_font.render(label.upper(), True, GOLD)
         self.screen.blit(s, (x, y))
-        line_x = x + s.get_width() + 12
+        line_x = x + s.get_width() + S(12)
         pygame.draw.line(self.screen, PANEL_BORDER,
                          (line_x, y + s.get_height() // 2 + 1),
-                         (self.PANEL_X + self.PANEL_W - 30, y + s.get_height() // 2 + 1), 1)
-        return y + s.get_height() + 12
+                         (self.PANEL_X + self.PANEL_W - S(30), y + s.get_height() // 2 + 1), max(1, S(1)))
+        return y + s.get_height() + S(12)
 
     def _row(self, x, y, label, options, current, action, content_right=None):
         """Draw a labeled row of pill-buttons. Returns next y."""
         th = theme_mod.active()
         if content_right is None:
-            content_right = self.PANEL_X + self.PANEL_W - 30
+            content_right = self.PANEL_X + self.PANEL_W - S(30)
 
         l = self.label_font.render(label + ":", True, th.text_white)
-        self.screen.blit(l, (x, y + 8))
-        ctrl_x = x + 170
-        avail_w = max(80, content_right - ctrl_x)
-        bh = 32
-        bw = max(64, min(120, (avail_w - (len(options) - 1) * 8) // max(1, len(options))))
+        self.screen.blit(l, (x, y + S(8)))
+        ctrl_x = x + S(170)
+        avail_w = max(S(80), content_right - ctrl_x)
+        bh = S(32)
+        bw = max(S(64), min(S(120), (avail_w - (len(options) - 1) * S(8)) // max(1, len(options))))
 
         for value, text in options:
             r = pygame.Rect(ctrl_x, y, bw, bh)
@@ -417,19 +418,19 @@ class SettingsMenu:
                 bb = int(top_col[2] + (bot_col[2] - top_col[2]) * t)
                 pygame.draw.line(plate, (rr, gg, bb, 255), (0, j), (bw, j))
             m = pygame.Surface((bw, bh), pygame.SRCALPHA)
-            pygame.draw.rect(m, (255, 255, 255, 255), m.get_rect(), border_radius=6)
+            pygame.draw.rect(m, (255, 255, 255, 255), m.get_rect(), border_radius=S(6))
             plate.blit(m, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
             self.screen.blit(plate, r.topleft)
-            pygame.draw.rect(self.screen, border, r, 1, border_radius=6)
+            pygame.draw.rect(self.screen, border, r, max(1, S(1)), border_radius=S(6))
             if active:
                 pygame.draw.line(self.screen, (255, 255, 255, 110),
-                                 (r.left + 4, r.top + 2),
-                                 (r.right - 4, r.top + 2), 1)
+                                 (r.left + S(4), r.top + S(2)),
+                                 (r.right - S(4), r.top + S(2)), max(1, S(1)))
             ts = self.small_font.render(str(text), True, txt_color)
             self.screen.blit(ts, ts.get_rect(center=r.center))
             self._hit.append((action, r, value))
-            ctrl_x += bw + 8
-        return y + bh + 12
+            ctrl_x += bw + S(8)
+        return y + bh + S(12)
 
     def _matches(self, candidate, current):
         if isinstance(candidate, float) and isinstance(current, float):
@@ -441,7 +442,7 @@ class SettingsMenu:
         y = self._row(lx, y, "Layout", list(zip(LAYOUT_OPTIONS, LAYOUT_LABELS)),
                       gs.layout_mode, "layout", rx)
 
-        y += 8
+        y += S(8)
         y = self._section(lx, y, "Animations & Log")
         y = self._row(lx, y, "Animations",
                       list(zip(ANIMATION_OPTIONS, ANIMATION_LABELS)),
@@ -465,7 +466,7 @@ class SettingsMenu:
                       list(zip(PEEK_PHASE_OPTIONS, PEEK_PHASE_LABELS)),
                       gs.peek_phase_seconds, "peek_phase", rx)
 
-        y += 8
+        y += S(8)
         y = self._section(lx, y, "Reactions & Declare")
         y = self._row(lx, y, "Reaction Window",
                       list(zip(REACTION_WINDOW_OPTIONS, REACTION_WINDOW_LABELS)),
@@ -489,7 +490,7 @@ class SettingsMenu:
             True, TEXT_DIM,
         )
         self.screen.blit(note, (lx, y))
-        y += 24
+        y += S(24)
 
         y = self._section(lx, y, "Pacing")
         y = self._row(lx, y, "AI Delay",
@@ -519,7 +520,7 @@ class SettingsMenu:
                       [(0.8, "80%"), (1.0, "100%"), (1.25, "125%"), (1.5, "150%")],
                       prof.settings.text_scale, "text_scale", rx)
 
-        y += 8
+        y += S(8)
         y = self._section(lx, y, "Motion & Visuals")
         y = self._row(lx, y, "Motion",
                       [(1.0, "Full"), (0.5, "Half"), (0.0, "Off")],
@@ -529,7 +530,7 @@ class SettingsMenu:
         y = self._row(lx, y, "Captions", [(False, "OFF"), (True, "ON")],
                       prof.settings.captions, "captions", rx)
 
-        y += 8
+        y += S(8)
         y = self._section(lx, y, "Coaching")
         y = self._row(lx, y, "Hints",
                       [(0, "None"), (1, "Subtle"), (2, "Memory"), (3, "All")],
@@ -556,7 +557,7 @@ class SettingsMenu:
         y = self._row(lx, y, "Music", opts, prof.settings.music_volume, "vol_music", rx)
         y = self._row(lx, y, "Voice", opts, prof.settings.voice_volume, "vol_voice", rx)
 
-        y += 8
+        y += S(8)
         note = self.small_font.render(
             "Music is a low-volume ambient bus reserved for future tracks.",
             True, TEXT_DIM,
@@ -580,7 +581,7 @@ class SettingsMenu:
             True, TEXT_DIM,
         )
         self.screen.blit(note, (lx, y))
-        y += 28
+        y += S(28)
 
         y = self._section(lx, y, "Stats")
         s = prof.stats
@@ -597,13 +598,13 @@ class SettingsMenu:
             l = self.label_font.render(label + ":", True, TEXT_DIM)
             self.screen.blit(l, (lx, y))
             v = self.label_font.render(value, True, TEXT_WHITE)
-            self.screen.blit(v, (lx + 200, y))
-            y += 24
+            self.screen.blit(v, (lx + S(200), y))
+            y += S(24)
 
-        y += 12
+        y += S(12)
         y = self._section(lx, y, "Tutorial")
         complete = "Yes" if prof.tutorial_complete else "No"
         l = self.label_font.render("Tutorial Complete:", True, TEXT_DIM)
         self.screen.blit(l, (lx, y))
         v = self.label_font.render(complete, True, TEXT_WHITE)
-        self.screen.blit(v, (lx + 200, y))
+        self.screen.blit(v, (lx + S(200), y))

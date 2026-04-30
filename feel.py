@@ -9,7 +9,7 @@ import random
 import pygame
 
 import theme
-from config import SCREEN_WIDTH, SCREEN_HEIGHT
+from config import SCREEN_WIDTH, SCREEN_HEIGHT, S
 
 
 class CameraShake:
@@ -22,7 +22,7 @@ class CameraShake:
 
     def kick(self, amp=4.0, duration=0.25, freq=24.0):
         ms = theme.active().motion_scale
-        amp = amp * ms
+        amp = amp * ms * (SCREEN_WIDTH / 1600.0)
         if amp <= 0:
             return
         self.amp = max(self.amp, amp)
@@ -89,7 +89,7 @@ class EdgeFlash:
         self.life = duration * ms
         self.max_life = self.life
         self.color = color or theme.active().brass_300
-        self.thickness = thickness
+        self.thickness = max(1, S(thickness))
 
     def update(self, dt):
         if self.life > 0:
@@ -161,7 +161,7 @@ class LampGlow:
         col = theme.active().lamp_glow
         center_x = int(SCREEN_WIDTH * (0.25 + 0.5 * self.t))
         center_y = SCREEN_HEIGHT // 2
-        radius = 220
+        radius = S(220)
         glow = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
         for i in range(12, 0, -1):
             t = i / 12

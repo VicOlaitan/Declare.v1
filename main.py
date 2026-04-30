@@ -23,6 +23,7 @@ from config import (
     ANIM_SEEN_SWAP_DURATION, ANIM_DISCARD_DURATION, ANIM_PAIR_FLY_DURATION,
     ANIM_NOTIFICATION_DURATION, CARD_GRID_SPACING_X, CARD_GRID_SPACING_Y,
     ANIM_SHUFFLE_DURATION, ANIM_REACTIVE_DROP_DURATION, ANIM_PENALTY_DRAW_DURATION,
+    S,
 )
 from game.game_manager import GameManager, GameState
 from game.player import HumanPlayer
@@ -53,64 +54,64 @@ def _build_action_buttons(gm, ui_font, game_settings=None):
     cp = gm.current_player()
     valid = get_valid_actions(cp, gm.drawn_card, gm.has_drawn_this_turn)
     btn_y = ACTION_BAR_Y + ACTION_BAR_H // 2
-    btn_h = 44
+    btn_h = S(44)
     if gm.state == GameState.TURN_START:
-        x = SCREEN_WIDTH // 2 - 120
+        x = SCREEN_WIDTH // 2 - S(120)
         if 'declare' in valid:
-            w = 160
+            w = S(160)
             rect = pygame.Rect(x - w // 2, btn_y - btn_h // 2, w, btn_h)
             buttons['declare'] = {'rect': rect, 'text': 'Declare', 'color': DECLARE_RED, 'hover_color': DECLARE_RED_HOVER, 'font': ui_font}
-            x += 180
+            x += S(180)
         if 'draw' in valid:
-            w = 140
+            w = S(140)
             rect = pygame.Rect(x - w // 2, btn_y - btn_h // 2, w, btn_h)
             buttons['draw'] = {'rect': rect, 'text': 'Draw', 'color': SWAP_GREEN, 'hover_color': SWAP_GREEN_HOVER, 'font': ui_font}
     elif gm.state == GameState.DECIDE:
-        x = SCREEN_WIDTH // 2 - 400
-        spacing = 8
+        x = SCREEN_WIDTH // 2 - S(400)
+        spacing = S(8)
         if game_settings and game_settings.self_pair_enabled:
             pairs = can_self_pair(cp)
             if pairs:
-                w = 110
+                w = S(110)
                 rect = pygame.Rect(x, btn_y - btn_h // 2, w, btn_h)
                 buttons['self_pair'] = {'rect': rect, 'text': 'Self-Pair', 'color': SELF_PAIR_COLOR, 'hover_color': SELF_PAIR_HOVER, 'font': ui_font}
                 x += w + spacing
         if 'play_power' in valid and gm.drawn_card and gm.drawn_card.power:
             power = gm.drawn_card.power
             label = POWER_LABELS.get(power, 'Power')
-            w = 150
+            w = S(150)
             rect = pygame.Rect(x, btn_y - btn_h // 2, w, btn_h)
             buttons['play_power'] = {'rect': rect, 'text': label, 'color': PEEK_BLUE, 'hover_color': PEEK_BLUE_HOVER, 'font': ui_font}
             x += w + spacing
         if 'swap' in valid:
-            w = 110
+            w = S(110)
             rect = pygame.Rect(x, btn_y - btn_h // 2, w, btn_h)
             buttons['swap'] = {'rect': rect, 'text': 'Swap', 'color': SWAP_GREEN, 'hover_color': SWAP_GREEN_HOVER, 'font': ui_font}
             x += w + spacing
         if 'discard' in valid:
-            w = 120
+            w = S(120)
             rect = pygame.Rect(x, btn_y - btn_h // 2, w, btn_h)
             buttons['discard'] = {'rect': rect, 'text': 'Discard', 'color': DISCARD_ORANGE, 'hover_color': DISCARD_ORANGE_HOVER, 'font': ui_font}
             x += w + spacing
         if 'pair_own' in valid:
-            w = 130
+            w = S(130)
             rect = pygame.Rect(x, btn_y - btn_h // 2, w, btn_h)
             buttons['pair_own'] = {'rect': rect, 'text': 'Pair Own', 'color': PAIR_TEAL, 'hover_color': PAIR_TEAL_HOVER, 'font': ui_font}
             x += w + spacing
         if 'pair_opponent' in valid:
-            w = 160
+            w = S(160)
             rect = pygame.Rect(x, btn_y - btn_h // 2, w, btn_h)
             buttons['pair_opponent'] = {'rect': rect, 'text': 'Pair Opponent', 'color': PAIR_TEAL, 'hover_color': PAIR_TEAL_HOVER, 'font': ui_font}
             x += w + spacing
         if 'declare' in valid:
-            w = 130
+            w = S(130)
             rect = pygame.Rect(x, btn_y - btn_h // 2, w, btn_h)
             buttons['declare'] = {'rect': rect, 'text': 'Declare', 'color': DECLARE_RED, 'hover_color': DECLARE_RED_HOVER, 'font': ui_font}
     elif gm.state == GameState.REACTION_WINDOW:
-        x = SCREEN_WIDTH // 2 - 200
-        spacing = 8
+        x = SCREEN_WIDTH // 2 - S(200)
+        spacing = S(8)
         rank = gm.reaction_rank
-        w = 140
+        w = S(140)
         rect = pygame.Rect(x, btn_y - btn_h // 2, w, btn_h)
         buttons['drop_self'] = {'rect': rect, 'text': f"Drop {rank}!", 'color': DROP_MATCH_COLOR, 'hover_color': DROP_MATCH_HOVER, 'font': ui_font}
         x += w + spacing
@@ -120,30 +121,35 @@ def _build_action_buttons(gm, ui_font, game_settings=None):
                     continue
                 opp_slots = can_call_opponent_card(cp, opp, rank)
                 if opp_slots:
-                    w = 180
+                    w = S(180)
                     rect = pygame.Rect(x, btn_y - btn_h // 2, w, btn_h)
                     buttons['drop_opponent'] = {'rect': rect, 'text': f"Call {opp.name}'s {rank}", 'color': PAIR_TEAL, 'hover_color': PAIR_TEAL_HOVER, 'font': ui_font}
                     x += w + spacing
                     break
-        w = 100
+        w = S(100)
         rect = pygame.Rect(x, btn_y - btn_h // 2, w, btn_h)
         buttons['pass_reaction'] = {'rect': rect, 'text': 'Pass', 'color': CANCEL_GRAY, 'hover_color': CANCEL_GRAY_HOVER, 'font': ui_font}
     return buttons
 
 
 def _build_cancel_button(text, ui_font):
-    w = 140
-    h = 40
-    rect = pygame.Rect(SCREEN_WIDTH // 2 - w // 2, ACTION_BAR_Y + ACTION_BAR_H + 2, w, h)
+    w = S(140)
+    h = S(40)
+    rect = pygame.Rect(SCREEN_WIDTH // 2 - w // 2, ACTION_BAR_Y + ACTION_BAR_H + S(2), w, h)
     return {'rect': rect, 'text': text, 'font': ui_font}
 
 
 def _build_shuffle_button(player, seat_position, ui_font):
-    px, py = seat_position
-    w = 80
-    h = 28
-    sx = px - w // 2
-    sy = py + CARD_HEIGHT // 2 + 40
+    """Shuffle sits just above the action bar, centered, matching the
+    Declare/Draw button geometry. Positioned with a small gap above the
+    Declare/Draw button row so it reads as a stacked extension of the bar."""
+    w = S(150)
+    h = S(44)
+    sx = SCREEN_WIDTH // 2 - w // 2
+    # Declare/Draw top edge is at ACTION_BAR_Y + ACTION_BAR_H/2 - btn_h/2.
+    # Sit shuffle 8px above that edge.
+    btn_y = ACTION_BAR_Y + ACTION_BAR_H // 2
+    sy = btn_y - S(22) - S(8) - h
     rect = pygame.Rect(sx, sy, w, h)
     return {'rect': rect, 'text': 'Shuffle', 'color': SHUFFLE_COLOR, 'hover_color': SHUFFLE_HOVER, 'font': ui_font}
 
@@ -192,18 +198,30 @@ def _clamp_to_bounds(cx, cy, bounds):
 
 
 class _ScaledDisplay:
-    """Renders the game at a fixed 1600x900 logical surface, then scale-blits
-    that surface onto a resizable physical window. Mouse coords from physical
-    space are translated to logical space before being read by handlers."""
+    """Renders the game at the configured logical surface (e.g. 3840x2160 for
+    4K rendering) and lets pygame.SCALED handle GPU-side downscaling to the
+    physical window. Mouse coords are auto-translated to logical space by
+    pygame, so to_logical is an identity function."""
 
     def __init__(self):
+        # Render at 4K logical surface, but the actual window is sized to fit
+        # the user's display so the title bar / taskbar stay visible. We
+        # downscale the 4K logical surface to the window via GPU-accelerated
+        # smoothscale every frame — keeps the visuals 4K-quality while the
+        # window stays comfortably windowed.
         info = pygame.display.Info()
-        max_w = max(800, info.current_w - 80)
-        max_h = max(600, info.current_h - 160)
-        scale = min(max_w / SCREEN_WIDTH, max_h / SCREEN_HEIGHT, 1.0)
-        win_w = max(640, int(SCREEN_WIDTH * scale))
-        win_h = max(360, int(SCREEN_HEIGHT * scale))
-        self.window = pygame.display.set_mode((win_w, win_h), pygame.RESIZABLE)
+        target_w = max(800, info.current_w - 120)
+        target_h = max(600, info.current_h - 200)
+        scale = min(target_w / SCREEN_WIDTH, target_h / SCREEN_HEIGHT, 1.0)
+        win_w = max(960, int(SCREEN_WIDTH * scale))
+        win_h = max(540, int(SCREEN_HEIGHT * scale))
+        try:
+            self.window = pygame.display.set_mode(
+                (win_w, win_h), pygame.RESIZABLE, vsync=1)
+        except pygame.error:
+            self.window = pygame.display.set_mode(
+                (win_w, win_h), pygame.RESIZABLE)
+        # Logical surface is the full 4K rendering target.
         self.logical = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT)).convert()
         self.shake_offset = (0, 0)
 
@@ -1371,20 +1389,26 @@ def main():
                 continue
 
         if game_manager and game_manager.current_player().is_human and game_manager.state == GameState.TURN_START:
-            awaiting = None
-            selected_slot = None
-            pair_opponent_give_slot = None
-            swap_second_click = False
-            status_message = ""
+            # Don't clobber 'confirm_declare' — it's the in-flight confirmation
+            # state that lives across frames at TURN_START.
+            if awaiting != 'confirm_declare':
+                awaiting = None
+                selected_slot = None
+                pair_opponent_give_slot = None
+                swap_second_click = False
+                status_message = ""
 
         if current_screen == "game_over" and prev_screen == "game" and game_manager is not None:
             _finalize_game_stats(prof, game_manager, game_over_result, game_meta,
                                   game_start_time, toasts, particles, achievement_queue)
+        if current_screen == "menu" and prev_screen != "menu":
+            menu_screen.start_shuffle()
         prev_screen = current_screen
 
         screen.fill(BG_GREEN)
 
         if current_screen == "menu":
+            menu_screen.update(dt)
             menu_screen.draw()
             if settings_open:
                 settings_menu.draw(game_settings, game_manager, mouse_pos)
@@ -1440,44 +1464,72 @@ def main():
                 hint_engine.draw_recent_discards(screen, getattr(game_manager, "discard_pile", []))
                 hint_engine.draw_coach(screen)
 
-                if game_settings.shuffle_enabled and cp.is_human and human_idx is not None:
+                draw_human_idx = _get_human_index(game_manager)
+                if game_settings.shuffle_enabled and cp.is_human and draw_human_idx is not None:
                     num_players = len(game_manager.players)
-                    seat_pos = _get_seat_position(human_idx, num_players)
-                    shuffle_btn = _build_shuffle_button(game_manager.players[human_idx], seat_pos, ui_font)
-                    hovered = shuffle_btn['rect'].collidepoint(mouse_pos)
+                    seat_pos = _get_seat_position(draw_human_idx, num_players)
+                    shuffle_btn = _build_shuffle_button(game_manager.players[draw_human_idx], seat_pos, ui_font)
+                    th = theme.active()
+                    rect = shuffle_btn['rect']
+                    hovered = rect.collidepoint(mouse_pos)
                     color = shuffle_btn['hover_color'] if hovered else shuffle_btn['color']
-                    pygame.draw.rect(screen, color, shuffle_btn['rect'], border_radius=6)
-                    pygame.draw.rect(screen, (30, 30, 35), shuffle_btn['rect'], 1, border_radius=6)
-                    btn_font = shuffle_btn['font']
-                    text_surf = btn_font.render(shuffle_btn['text'], True, TEXT_WHITE)
-                    text_rect = text_surf.get_rect(center=shuffle_btn['rect'].center)
+
+                    # Match Declare/Draw button styling: shadow + gradient plate
+                    # + brass border + top highlight + centered label.
+                    shadow_surf = pygame.Surface((rect.width + S(6), rect.height + S(8)), pygame.SRCALPHA)
+                    pygame.draw.rect(shadow_surf, (0, 0, 0, 90),
+                                     (S(3), S(5), rect.width, rect.height),
+                                     border_radius=S(10))
+                    screen.blit(shadow_surf, (rect.x - S(3), rect.y))
+
+                    plate = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+                    for i in range(rect.height):
+                        t = i / max(1, rect.height - 1)
+                        shade = 0.85 + 0.15 * (1 - abs(t - 0.4) * 2)
+                        cc = (int(color[0] * shade), int(color[1] * shade),
+                              int(color[2] * shade), 255)
+                        pygame.draw.line(plate, cc, (0, i), (rect.width, i))
+                    mask = pygame.Surface(plate.get_size(), pygame.SRCALPHA)
+                    pygame.draw.rect(mask, (255, 255, 255, 255), mask.get_rect(),
+                                     border_radius=S(10))
+                    plate.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+                    screen.blit(plate, rect)
+
+                    pygame.draw.line(screen, th.brass_300,
+                                     (rect.left + S(4), rect.top + S(2)),
+                                     (rect.right - S(4), rect.top + S(2)),
+                                     max(1, S(1)))
+                    pygame.draw.rect(screen, th.brass_500, rect, max(1, S(2)),
+                                     border_radius=S(10))
+                    text_surf = ui_font.render(shuffle_btn['text'], True, TEXT_WHITE)
+                    text_rect = text_surf.get_rect(center=rect.center)
                     screen.blit(text_surf, text_rect)
 
                 if game_manager.state == GameState.REACTION_WINDOW:
-                    banner_font = pygame.font.SysFont("arial", 28, bold=True)
+                    banner_font = typo.body_bold(S(28))
                     remaining = max(0, game_manager.reaction_timer)
                     banner_text = f"REACTION! Drop a {game_manager.reaction_rank}? ({remaining:.1f}s)"
                     banner_surf = banner_font.render(banner_text, True, GOLD)
-                    banner_rect = banner_surf.get_rect(center=(SCREEN_WIDTH // 2, STATUS_BAR_H + 30))
-                    bg_rect = banner_rect.inflate(40, 16)
+                    banner_rect = banner_surf.get_rect(center=(SCREEN_WIDTH // 2, STATUS_BAR_H + S(30)))
+                    bg_rect = banner_rect.inflate(S(40), S(16))
                     bg_surf = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
-                    pygame.draw.rect(bg_surf, (0, 0, 0, 200), bg_surf.get_rect(), border_radius=10)
-                    pygame.draw.rect(bg_surf, (*GOLD, 120), bg_surf.get_rect(), 2, border_radius=10)
+                    pygame.draw.rect(bg_surf, (0, 0, 0, 200), bg_surf.get_rect(), border_radius=S(10))
+                    pygame.draw.rect(bg_surf, (*GOLD, 120), bg_surf.get_rect(), max(1, S(2)), border_radius=S(10))
                     screen.blit(bg_surf, bg_rect.topleft)
                     screen.blit(banner_surf, banner_rect)
 
                 power_label, power_color = hint_engine.power_label_for_drawn(game_manager)
                 if power_label and game_manager.drawn_card:
                     label_surf = ui_font.render(f"Power: {power_label}", True, power_color)
-                    pad = 8
+                    pad = S(8)
                     bx = DRAWN_CARD_POS[0] - label_surf.get_width() // 2 - pad
-                    by = DRAWN_CARD_POS[1] - 90
+                    by = DRAWN_CARD_POS[1] - S(90)
                     bg = pygame.Surface((label_surf.get_width() + pad * 2,
-                                         label_surf.get_height() + 8), pygame.SRCALPHA)
-                    pygame.draw.rect(bg, (0, 0, 0, 180), bg.get_rect(), border_radius=6)
-                    pygame.draw.rect(bg, power_color, bg.get_rect(), 1, border_radius=6)
+                                         label_surf.get_height() + S(8)), pygame.SRCALPHA)
+                    pygame.draw.rect(bg, (0, 0, 0, 180), bg.get_rect(), border_radius=S(6))
+                    pygame.draw.rect(bg, power_color, bg.get_rect(), max(1, S(1)), border_radius=S(6))
                     screen.blit(bg, (bx, by))
-                    screen.blit(label_surf, (bx + pad, by + 4))
+                    screen.blit(label_surf, (bx + pad, by + S(4)))
 
                 if notification_text:
                     renderer.draw_reaction_result(notification_text, renderer.screen)
@@ -1503,13 +1555,13 @@ def main():
         if current_screen == "game":
             screen.blit(vignette.get(0.45), (0, 0))
         if current_screen == "game" and game_settings.streamer_mode:
-            stream_cover = pygame.Surface((SCREEN_WIDTH, 220), pygame.SRCALPHA)
+            stream_h = S(220)
+            stream_cover = pygame.Surface((SCREEN_WIDTH, stream_h), pygame.SRCALPHA)
             stream_cover.fill((0, 0, 0, 220))
-            import typography as _typo
-            label_font = _typo.body_bold(22)
+            label_font = typo.body_bold(S(22))
             label = label_font.render("STREAM-SAFE — Hand hidden", True, (200, 200, 200))
-            stream_cover.blit(label, (24, 96))
-            screen.blit(stream_cover, (0, SCREEN_HEIGHT - 220))
+            stream_cover.blit(label, (S(24), S(96)))
+            screen.blit(stream_cover, (0, SCREEN_HEIGHT - stream_h))
         if game_settings.captions:
             captions.draw(screen)
         toasts.draw(screen)

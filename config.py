@@ -1,5 +1,23 @@
-SCREEN_WIDTH = 1600
-SCREEN_HEIGHT = 900
+# 4K rendering: SCALE multiplies every spatial constant. The original
+# layout was authored at 1600x900; bumping SCALE renders everything at
+# (1600*S, 900*S) with proportional fonts/cards/positions.
+SCALE = 2.4
+
+
+def S(n):
+    """Scale a single linear pixel value."""
+    return int(round(n * SCALE))
+
+
+def Sp(t):
+    """Scale a tuple of pixel values (positions, rects, etc)."""
+    return tuple(int(round(v * SCALE)) for v in t)
+
+
+import os
+
+SCREEN_WIDTH = S(1600)
+SCREEN_HEIGHT = S(900)
 FPS = 60
 AI_DELAY = 0.8
 PEEK_REVEAL_SECONDS = 2.5
@@ -36,45 +54,45 @@ DISCARD_ORANGE_HOVER = (230, 150, 50)
 PAIR_TEAL = (40, 140, 160)
 PAIR_TEAL_HOVER = (60, 170, 190)
 
-STATUS_BAR_H = 44
-ACTION_BAR_Y = 830
-ACTION_BAR_H = 70
+STATUS_BAR_H = S(44)
+ACTION_BAR_Y = S(830)
+ACTION_BAR_H = S(70)
 
-CARD_WIDTH = 100
-CARD_HEIGHT = 140
-CORNER_RADIUS = 10
+CARD_WIDTH = S(100)
+CARD_HEIGHT = S(140)
+CORNER_RADIUS = S(10)
 
-CARD_SPREAD = 116
+CARD_SPREAD = S(116)
 
-DECK_CENTER = (640, 400)
-DRAWN_CARD_POS = (860, 400)
-DISCARD_POS = (750, 400)
+DECK_CENTER = Sp((640, 400))
+DRAWN_CARD_POS = Sp((860, 400))
+DISCARD_POS = Sp((750, 400))
 
-PLAYER_BOTTOM = (800, 700)
-PLAYER_TOP = (800, 200)
-PLAYER_LEFT = (260, 450)
-PLAYER_RIGHT = (1340, 450)
+PLAYER_BOTTOM = Sp((800, 700))
+PLAYER_TOP = Sp((800, 200))
+PLAYER_LEFT = Sp((260, 450))
+PLAYER_RIGHT = Sp((1340, 450))
 
 PLAYER_AREA_2 = {
-    0: (20, 480, 1580, 820),
-    1: (40, 80, 1560, 380),
+    0: Sp((20, 480, 1580, 820)),
+    1: Sp((40, 80, 1560, 380)),
 }
 PLAYER_AREA_3 = {
-    0: (20, 480, 1580, 820),
-    1: (40, 80, 780, 380),
-    2: (820, 80, 1560, 380),
+    0: Sp((20, 480, 1580, 820)),
+    1: Sp((40, 80, 780, 380)),
+    2: Sp((820, 80, 1560, 380)),
 }
 PLAYER_AREA_4 = {
-    0: (20, 480, 1580, 820),
-    1: (40, 80, 1560, 380),
-    2: (20, 140, 480, 820),
-    3: (1120, 140, 1580, 820),
+    0: Sp((20, 480, 1580, 820)),
+    1: Sp((40, 80, 1560, 380)),
+    2: Sp((20, 140, 480, 820)),
+    3: Sp((1120, 140, 1580, 820)),
 }
 
-LOG_PANEL_X = 1300
-LOG_PANEL_Y = 520
-LOG_PANEL_W = 280
-LOG_PANEL_H = 280
+LOG_PANEL_X = S(1300)
+LOG_PANEL_Y = S(520)
+LOG_PANEL_W = S(280)
+LOG_PANEL_H = S(280)
 
 CARD_VALUES = {
     'A': 1,
@@ -119,9 +137,9 @@ POWER_COLORS = {
     'seen_swap': SWAP_GREEN,
 }
 
-CARD_GRID_SPACING_X = 100
-CARD_GRID_SPACING_Y = 130
-PLAYER_AREA_PADDING = 20
+CARD_GRID_SPACING_X = S(100)
+CARD_GRID_SPACING_Y = S(130)
+PLAYER_AREA_PADDING = S(20)
 
 DEFAULT_AI_DELAY = 0.8
 DEFAULT_PEEK_REVEAL_TIME = 2.5
@@ -149,7 +167,7 @@ LAYOUT_LABELS = ['Line', 'Square', 'Free']
 AI_DIFFICULTY_OPTIONS = ['easy', 'medium', 'hard']
 AI_DIFFICULTY_LABELS = ['Easy', 'Medium', 'Hard']
 PEEK_PHASE_OPTIONS = [3.0, 5.0, 10.0, 999.0]
-PEEK_PHASE_LABELS = ['3s', '5s', '10s', '\u221e']
+PEEK_PHASE_LABELS = ['3s', '5s', '10s', '∞']
 SWAP_REVEAL_SECONDS = 2.0
 DEFAULT_HAND_SIZE = 4
 DEFAULT_PEEK_COUNT = 2
@@ -181,10 +199,10 @@ SELF_PAIR_HOVER = (60, 190, 170)
 DROP_MATCH_COLOR = (220, 140, 40)
 DROP_MATCH_HOVER = (240, 165, 60)
 
-CARD_FONT_SIZE = 18
-CARD_BIG_FONT_SIZE = 28
-TITLE_FONT_SIZE = 56
-SUBTITLE_FONT_SIZE = 22
-UI_FONT_SIZE = 20
-LOG_FONT_SIZE = 15
-SMALL_FONT_SIZE = 14
+CARD_FONT_SIZE = S(18)
+CARD_BIG_FONT_SIZE = S(28)
+TITLE_FONT_SIZE = S(56)
+SUBTITLE_FONT_SIZE = S(22)
+UI_FONT_SIZE = S(20)
+LOG_FONT_SIZE = S(15)
+SMALL_FONT_SIZE = S(14)

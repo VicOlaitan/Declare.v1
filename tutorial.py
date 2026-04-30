@@ -15,7 +15,7 @@ import theme
 import audio
 from config import (
     SCREEN_WIDTH, SCREEN_HEIGHT, DECK_CENTER, DRAWN_CARD_POS, DISCARD_POS,
-    ACTION_BAR_Y, ACTION_BAR_H,
+    ACTION_BAR_Y, ACTION_BAR_H, S,
 )
 
 
@@ -124,9 +124,9 @@ class TutorialDirector:
     def _ensure_fonts(self):
         if self._title_font is None:
             import typography as typo
-            self._title_font = typo.display_bold(30)
-            self._body_font = typo.body(20)
-            self._small_font = typo.body(14)
+            self._title_font = typo.display_bold(S(30))
+            self._body_font = typo.body(S(20))
+            self._small_font = typo.body(S(14))
 
     def start(self):
         self.active = True
@@ -204,87 +204,87 @@ class TutorialDirector:
         if ring_rect is not None:
             self._draw_highlight(screen, ring_rect)
 
-        panel_w, panel_h = 720, 220
+        panel_w, panel_h = S(720), S(220)
         panel_x = SCREEN_WIDTH // 2 - panel_w // 2
-        panel_y = SCREEN_HEIGHT - panel_h - 60
+        panel_y = SCREEN_HEIGHT - panel_h - S(60)
         if target == "deck" or target == "discard" or target == "drawn_card":
-            panel_y = SCREEN_HEIGHT - panel_h - 60
+            panel_y = SCREEN_HEIGHT - panel_h - S(60)
         if target == "declare_button":
-            panel_y = 100
+            panel_y = S(100)
         if target == "player_hand":
-            panel_y = 80
+            panel_y = S(80)
 
-        slide = int((1 - self._fade) * 30)
+        slide = int((1 - self._fade) * S(30))
         panel_y -= slide
 
         panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
-        pygame.draw.rect(panel, (*th.panel_bg, 235), panel.get_rect(), border_radius=14)
-        pygame.draw.rect(panel, th.brass_500, panel.get_rect(), 2, border_radius=14)
+        pygame.draw.rect(panel, (*th.panel_bg, 235), panel.get_rect(), border_radius=S(14))
+        pygame.draw.rect(panel, th.brass_500, panel.get_rect(), max(1, S(2)), border_radius=S(14))
         screen.blit(panel, (panel_x, panel_y))
 
         chapter_label = f"Chapter {self.chapter + 1} / {len(CHAPTERS)}"
         cl_surf = self._small_font.render(chapter_label, True, th.brass_300)
-        screen.blit(cl_surf, (panel_x + 20, panel_y + 14))
+        screen.blit(cl_surf, (panel_x + S(20), panel_y + S(14)))
 
         title_surf = self._title_font.render(step.title, True, th.brass_300)
-        screen.blit(title_surf, (panel_x + 20, panel_y + 40))
+        screen.blit(title_surf, (panel_x + S(20), panel_y + S(40)))
 
-        body_lines = self._wrap(step.body, panel_w - 40)
+        body_lines = self._wrap(step.body, panel_w - S(40))
         for i, line in enumerate(body_lines):
             surf = self._body_font.render(line, True, th.text_white)
-            screen.blit(surf, (panel_x + 20, panel_y + 90 + i * 28))
+            screen.blit(surf, (panel_x + S(20), panel_y + S(90) + i * S(28)))
 
         cont_label = "Continue" if step.advance_on != "continue" else "Continue"
         if step.advance_on != "continue" and not self._satisfied:
             cont_label = "Try the highlighted action"
-        bw, bh = 200, 38
-        self._continue_rect = pygame.Rect(panel_x + panel_w - bw - 20,
-                                          panel_y + panel_h - bh - 18, bw, bh)
+        bw, bh = S(200), S(38)
+        self._continue_rect = pygame.Rect(panel_x + panel_w - bw - S(20),
+                                          panel_y + panel_h - bh - S(18), bw, bh)
         c_color = th.signal_go if (self._satisfied or step.advance_on == "continue") else th.cancel_gray
-        pygame.draw.rect(screen, c_color, self._continue_rect, border_radius=8)
-        pygame.draw.rect(screen, th.brass_500, self._continue_rect, 2, border_radius=8)
+        pygame.draw.rect(screen, c_color, self._continue_rect, border_radius=S(8))
+        pygame.draw.rect(screen, th.brass_500, self._continue_rect, max(1, S(2)), border_radius=S(8))
         cs = self._body_font.render(cont_label, True, th.text_white)
         screen.blit(cs, cs.get_rect(center=self._continue_rect.center))
 
-        sw, sh = 100, 34
-        self._skip_rect = pygame.Rect(panel_x + 20, panel_y + panel_h - sh - 20, sw, sh)
-        pygame.draw.rect(screen, (60, 60, 60), self._skip_rect, border_radius=6)
-        pygame.draw.rect(screen, th.brass_700, self._skip_rect, 1, border_radius=6)
+        sw, sh = S(100), S(34)
+        self._skip_rect = pygame.Rect(panel_x + S(20), panel_y + panel_h - sh - S(20), sw, sh)
+        pygame.draw.rect(screen, (60, 60, 60), self._skip_rect, border_radius=S(6))
+        pygame.draw.rect(screen, th.brass_700, self._skip_rect, max(1, S(1)), border_radius=S(6))
         sk = self._small_font.render("Skip", True, th.text_dim)
         screen.blit(sk, sk.get_rect(center=self._skip_rect.center))
 
         keys_hint = self._small_font.render("Space / Enter to continue, Esc to skip",
                                              True, th.text_muted)
-        screen.blit(keys_hint, (panel_x + 130, panel_y + panel_h - 30))
+        screen.blit(keys_hint, (panel_x + S(130), panel_y + panel_h - S(30)))
 
     def _target_rect(self, target):
         if target == "deck":
             cx, cy = DECK_CENTER
-            return pygame.Rect(cx - 60, cy - 80, 120, 160)
+            return pygame.Rect(cx - S(60), cy - S(80), S(120), S(160))
         if target == "discard":
             cx, cy = DISCARD_POS
-            return pygame.Rect(cx - 60, cy - 80, 120, 160)
+            return pygame.Rect(cx - S(60), cy - S(80), S(120), S(160))
         if target == "drawn_card":
             cx, cy = DRAWN_CARD_POS
-            return pygame.Rect(cx - 60, cy - 80, 120, 160)
+            return pygame.Rect(cx - S(60), cy - S(80), S(120), S(160))
         if target == "declare_button":
-            return pygame.Rect(SCREEN_WIDTH // 2 - 200, ACTION_BAR_Y - 4, 400, ACTION_BAR_H + 8)
+            return pygame.Rect(SCREEN_WIDTH // 2 - S(200), ACTION_BAR_Y - S(4), S(400), ACTION_BAR_H + S(8))
         if target == "player_hand":
-            return pygame.Rect(280, 620, 1040, 180)
+            return pygame.Rect(S(280), S(620), S(1040), S(180))
         return None
 
     def _draw_highlight(self, screen, rect):
         th = theme.active()
         t = pygame.time.get_ticks() / 1000.0
         pulse = 0.6 + 0.4 * math.sin(t * 3.5)
-        glow_surf = pygame.Surface((rect.width + 60, rect.height + 60), pygame.SRCALPHA)
+        glow_surf = pygame.Surface((rect.width + S(60), rect.height + S(60)), pygame.SRCALPHA)
         for i in range(20, 0, -1):
             a = int(15 * pulse * (i / 20))
             pygame.draw.rect(glow_surf, (*th.brass_300, a),
-                             pygame.Rect(30 - i, 30 - i, rect.width + i * 2, rect.height + i * 2),
-                             border_radius=12 + i)
-        screen.blit(glow_surf, (rect.x - 30, rect.y - 30), special_flags=pygame.BLEND_RGBA_ADD)
-        pygame.draw.rect(screen, th.brass_300, rect, 3, border_radius=10)
+                             pygame.Rect(S(30) - i, S(30) - i, rect.width + i * 2, rect.height + i * 2),
+                             border_radius=S(12) + i)
+        screen.blit(glow_surf, (rect.x - S(30), rect.y - S(30)), special_flags=pygame.BLEND_RGBA_ADD)
+        pygame.draw.rect(screen, th.brass_300, rect, max(1, S(3)), border_radius=S(10))
 
     def _wrap(self, text, max_w):
         words = text.split()
@@ -325,9 +325,9 @@ class FirstLaunchSplash:
     def _ensure(self):
         if self._title_font is None:
             import typography as typo
-            self._title_font = typo.display_bold(56)
-            self._body_font = typo.header_italic(22)
-            self._btn_font = typo.body_bold(22)
+            self._title_font = typo.display_bold(S(56))
+            self._body_font = typo.header_italic(S(22))
+            self._btn_font = typo.body_bold(S(22))
 
     def draw(self, screen):
         if not self.active:
@@ -340,30 +340,30 @@ class FirstLaunchSplash:
 
         title = self._title_font.render("Welcome to Declare", True, th.brass_300)
         title.set_alpha(int(255 * self._fade))
-        screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, 280)))
+        screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, S(280))))
 
         body = "First time at the table?"
         body_surf = self._body_font.render(body, True, th.text_white)
         body_surf.set_alpha(int(255 * self._fade))
-        screen.blit(body_surf, body_surf.get_rect(center=(SCREEN_WIDTH // 2, 360)))
+        screen.blit(body_surf, body_surf.get_rect(center=(SCREEN_WIDTH // 2, S(360))))
 
         body2 = "We can walk you through the rules in five minutes."
         body2_surf = self._body_font.render(body2, True, th.text_dim)
         body2_surf.set_alpha(int(255 * self._fade))
-        screen.blit(body2_surf, body2_surf.get_rect(center=(SCREEN_WIDTH // 2, 396)))
+        screen.blit(body2_surf, body2_surf.get_rect(center=(SCREEN_WIDTH // 2, S(396))))
 
-        bw, bh = 280, 56
+        bw, bh = S(280), S(56)
         cx = SCREEN_WIDTH // 2
-        self._tutorial_rect = pygame.Rect(cx - bw - 20, 500, bw, bh)
-        self._skip_rect = pygame.Rect(cx + 20, 500, bw, bh)
+        self._tutorial_rect = pygame.Rect(cx - bw - S(20), S(500), bw, bh)
+        self._skip_rect = pygame.Rect(cx + S(20), S(500), bw, bh)
 
-        pygame.draw.rect(screen, th.signal_go, self._tutorial_rect, border_radius=10)
-        pygame.draw.rect(screen, th.brass_500, self._tutorial_rect, 2, border_radius=10)
+        pygame.draw.rect(screen, th.signal_go, self._tutorial_rect, border_radius=S(10))
+        pygame.draw.rect(screen, th.brass_500, self._tutorial_rect, max(1, S(2)), border_radius=S(10))
         ts = self._btn_font.render("Start Tutorial", True, th.text_white)
         screen.blit(ts, ts.get_rect(center=self._tutorial_rect.center))
 
-        pygame.draw.rect(screen, (60, 60, 60), self._skip_rect, border_radius=10)
-        pygame.draw.rect(screen, th.brass_700, self._skip_rect, 2, border_radius=10)
+        pygame.draw.rect(screen, (60, 60, 60), self._skip_rect, border_radius=S(10))
+        pygame.draw.rect(screen, th.brass_700, self._skip_rect, max(1, S(2)), border_radius=S(10))
         ss = self._btn_font.render("Skip — I know how to play", True, th.text_white)
         screen.blit(ss, ss.get_rect(center=self._skip_rect.center))
 

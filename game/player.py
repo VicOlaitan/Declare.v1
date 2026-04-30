@@ -8,6 +8,7 @@ class Player:
         self.name = name
         self.is_human = is_human
         self.seat_index = seat_index
+        self.hand_size: int = hand_size
         self.hand: list = [None] * hand_size
         self.known_cards: dict = {}
         self.known_opponent_cards: dict = {}

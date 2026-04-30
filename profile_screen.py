@@ -8,7 +8,7 @@ import pygame
 import theme
 import audio
 import profile as profile_mod
-from config import SCREEN_WIDTH, SCREEN_HEIGHT
+from config import SCREEN_WIDTH, SCREEN_HEIGHT, S
 
 
 class ProfileScreen:
@@ -27,11 +27,11 @@ class ProfileScreen:
     def _ensure(self):
         if self._title_font is None:
             import typography as typo
-            self._title_font = typo.display_bold(38)
-            self._tab_font = typo.body_bold(22)
-            self._body_font = typo.body(18)
-            self._small_font = typo.body(14)
-            self._number_font = typo.header_bold(36)
+            self._title_font = typo.display_bold(S(38))
+            self._tab_font = typo.body_bold(S(22))
+            self._body_font = typo.body(S(18))
+            self._small_font = typo.body(S(14))
+            self._number_font = typo.header_bold(S(36))
 
     def draw(self, prof):
         self._ensure()
@@ -47,23 +47,23 @@ class ProfileScreen:
         self.screen.blit(bg, (0, 0))
 
         title_surf = self._title_font.render("Profile & Stats", True, th.brass_300)
-        self.screen.blit(title_surf, title_surf.get_rect(center=(SCREEN_WIDTH // 2, 60)))
+        self.screen.blit(title_surf, title_surf.get_rect(center=(SCREEN_WIDTH // 2, S(60))))
 
         tabs = [("stats", "Stats"), ("achievements", "Achievements"),
                 ("backs", "Card Backs")]
-        tab_w = 220
-        tab_y = 110
+        tab_w = S(220)
+        tab_y = S(110)
         total_w = tab_w * len(tabs)
         start_x = (SCREEN_WIDTH - total_w) // 2
         self.tab_rects = {}
         for i, (key, label) in enumerate(tabs):
-            r = pygame.Rect(start_x + i * tab_w, tab_y, tab_w - 4, 44)
+            r = pygame.Rect(start_x + i * tab_w, tab_y, tab_w - S(4), S(44))
             self.tab_rects[key] = r
             active_tab = (key == self.tab)
             color = th.brass_500 if active_tab else (60, 60, 60)
-            pygame.draw.rect(self.screen, color, r, border_radius=8)
+            pygame.draw.rect(self.screen, color, r, border_radius=S(8))
             border_color = th.brass_300 if active_tab else th.brass_700
-            pygame.draw.rect(self.screen, border_color, r, 2, border_radius=8)
+            pygame.draw.rect(self.screen, border_color, r, max(1, S(2)), border_radius=S(8))
             ts = self._tab_font.render(label, True, th.text_white)
             self.screen.blit(ts, ts.get_rect(center=r.center))
 
@@ -74,10 +74,10 @@ class ProfileScreen:
         else:
             self._draw_backs(prof, th)
 
-        bw, bh = 180, 44
-        self.back_rect = pygame.Rect(40, SCREEN_HEIGHT - bh - 30, bw, bh)
-        pygame.draw.rect(self.screen, (60, 60, 60), self.back_rect, border_radius=8)
-        pygame.draw.rect(self.screen, th.brass_500, self.back_rect, 2, border_radius=8)
+        bw, bh = S(180), S(44)
+        self.back_rect = pygame.Rect(S(40), SCREEN_HEIGHT - bh - S(30), bw, bh)
+        pygame.draw.rect(self.screen, (60, 60, 60), self.back_rect, border_radius=S(8))
+        pygame.draw.rect(self.screen, th.brass_500, self.back_rect, max(1, S(2)), border_radius=S(8))
         bs = self._tab_font.render("← Back", True, th.text_white)
         self.screen.blit(bs, bs.get_rect(center=self.back_rect.center))
 
@@ -97,58 +97,58 @@ class ProfileScreen:
             ("Reactive (right)", s.reactive_pairs_correct),
             ("Reactive (wrong)", s.reactive_pairs_wrong),
         ]
-        gx = SCREEN_WIDTH // 2 - 540
-        gy = 200
-        cw, ch = 260, 110
+        gx = SCREEN_WIDTH // 2 - S(540)
+        gy = S(200)
+        cw, ch = S(260), S(110)
         for i, (label, value) in enumerate(cards):
             col = i % 4
             row = i // 4
-            rx = gx + col * (cw + 20)
-            ry = gy + row * (ch + 20)
+            rx = gx + col * (cw + S(20))
+            ry = gy + row * (ch + S(20))
             r = pygame.Rect(rx, ry, cw, ch)
-            pygame.draw.rect(self.screen, (*th.panel_bg, 220), r, border_radius=10)
-            pygame.draw.rect(self.screen, th.brass_700, r, 1, border_radius=10)
+            pygame.draw.rect(self.screen, (*th.panel_bg, 220), r, border_radius=S(10))
+            pygame.draw.rect(self.screen, th.brass_700, r, max(1, S(1)), border_radius=S(10))
             label_surf = self._small_font.render(label.upper(), True, th.brass_300)
-            self.screen.blit(label_surf, (rx + 16, ry + 14))
+            self.screen.blit(label_surf, (rx + S(16), ry + S(14)))
             value_str = str(value)
             val_surf = self._number_font.render(value_str, True, th.text_white)
-            self.screen.blit(val_surf, (rx + 16, ry + 40))
+            self.screen.blit(val_surf, (rx + S(16), ry + S(40)))
 
         if s.total_play_seconds > 0:
             mins = int(s.total_play_seconds // 60)
             tt = self._body_font.render(f"Total play time: {mins} minutes", True, th.text_dim)
-            self.screen.blit(tt, (gx, gy + 280))
+            self.screen.blit(tt, (gx, gy + S(280)))
 
     def _draw_achievements(self, prof, th):
-        gx = SCREEN_WIDTH // 2 - 540
-        gy = 200
+        gx = SCREEN_WIDTH // 2 - S(540)
+        gy = S(200)
         items = list(prof.achievements.values())
-        cw, ch = 350, 70
+        cw, ch = S(350), S(70)
         cols = 3
         for i, ach in enumerate(items):
             col = i % cols
             row = i // cols
-            rx = gx + col * (cw + 20)
-            ry = gy + row * (ch + 12)
+            rx = gx + col * (cw + S(20))
+            ry = gy + row * (ch + S(12))
             r = pygame.Rect(rx, ry, cw, ch)
             unlocked = ach.get("unlocked", False)
             bg_color = (*th.panel_bg, 220) if not unlocked else (*th.panel_bg, 250)
-            pygame.draw.rect(self.screen, bg_color, r, border_radius=8)
+            pygame.draw.rect(self.screen, bg_color, r, border_radius=S(8))
             border = th.brass_300 if unlocked else (60, 60, 60)
-            pygame.draw.rect(self.screen, border, r, 2, border_radius=8)
-            badge_x = rx + 16
+            pygame.draw.rect(self.screen, border, r, max(1, S(2)), border_radius=S(8))
+            badge_x = rx + S(16)
             badge_y = ry + ch // 2
             badge_color = th.brass_300 if unlocked else (50, 50, 50)
-            pygame.draw.circle(self.screen, badge_color, (badge_x, badge_y), 14)
-            pygame.draw.circle(self.screen, th.brass_900, (badge_x, badge_y), 14, 2)
+            pygame.draw.circle(self.screen, badge_color, (badge_x, badge_y), S(14))
+            pygame.draw.circle(self.screen, th.brass_900, (badge_x, badge_y), S(14), max(1, S(2)))
             star = self._small_font.render("*" if unlocked else "?", True, th.brass_900)
             self.screen.blit(star, star.get_rect(center=(badge_x, badge_y)))
             title_color = th.text_white if unlocked else th.text_muted
             t_surf = self._body_font.render(ach.get("title", ach["key"]), True, title_color)
-            self.screen.blit(t_surf, (rx + 40, ry + 10))
+            self.screen.blit(t_surf, (rx + S(40), ry + S(10)))
             d_surf = self._small_font.render(ach.get("description", "")[:50],
                                               True, th.text_dim)
-            self.screen.blit(d_surf, (rx + 40, ry + 36))
+            self.screen.blit(d_surf, (rx + S(40), ry + S(36)))
 
     def _draw_backs(self, prof, th):
         import card_render
@@ -159,11 +159,11 @@ class ProfileScreen:
             ("deco_emerald",  "Emerald",       "deco_emerald" in prof.unlocked_card_backs),
             ("deco_obsidian", "Obsidian",      "deco_obsidian" in prof.unlocked_card_backs),
         ]
-        gx = SCREEN_WIDTH // 2 - 540
-        gy = 200
+        gx = SCREEN_WIDTH // 2 - S(540)
+        gy = S(200)
         for i, (key, label, unlocked) in enumerate(styles):
-            rx = gx + i * 280
-            ry = gy + 20
+            rx = gx + i * S(280)
+            ry = gy + S(20)
             back_surf = card_render.paint_back(key if unlocked else "classic",
                                                 CARD_WIDTH * 2, CARD_HEIGHT * 2)
             if not unlocked:
@@ -173,10 +173,10 @@ class ProfileScreen:
             self.screen.blit(back_surf, (rx, ry))
             label_color = th.brass_300 if unlocked else th.text_muted
             l_surf = self._tab_font.render(label, True, label_color)
-            self.screen.blit(l_surf, l_surf.get_rect(midtop=(rx + CARD_WIDTH, ry + CARD_HEIGHT * 2 + 12)))
+            self.screen.blit(l_surf, l_surf.get_rect(midtop=(rx + CARD_WIDTH, ry + CARD_HEIGHT * 2 + S(12))))
             if not unlocked:
                 hint = self._small_font.render("Locked", True, th.text_muted)
-                self.screen.blit(hint, hint.get_rect(midtop=(rx + CARD_WIDTH, ry + CARD_HEIGHT * 2 + 40)))
+                self.screen.blit(hint, hint.get_rect(midtop=(rx + CARD_WIDTH, ry + CARD_HEIGHT * 2 + S(40))))
 
     def handle_event(self, event, prof):
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -248,9 +248,9 @@ class HowToPlayScreen:
     def _ensure(self):
         if self._title_font is None:
             import typography as typo
-            self._title_font = typo.display_bold(36)
-            self._head_font = typo.header_bold(22)
-            self._body_font = typo.body(18)
+            self._title_font = typo.display_bold(S(36))
+            self._head_font = typo.header_bold(S(22))
+            self._body_font = typo.body(S(18))
 
     def draw(self):
         self._ensure()
@@ -266,44 +266,44 @@ class HowToPlayScreen:
         self.screen.blit(bg, (0, 0))
 
         title = self._title_font.render("How To Play", True, th.brass_300)
-        self.screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, 70)))
+        self.screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, S(70))))
 
-        col_w = 720
+        col_w = S(720)
         col_x = SCREEN_WIDTH // 2 - col_w // 2
-        y = 140 - self.scroll
+        y = S(140) - self.scroll
         for heading, body in HOW_TO_SECTIONS:
             h_surf = self._head_font.render(heading, True, th.brass_300)
             self.screen.blit(h_surf, (col_x, y))
-            y += 32
+            y += S(32)
             for line in self._wrap(body, col_w):
                 if 0 < y < SCREEN_HEIGHT:
                     bs = self._body_font.render(line, True, th.text_white)
                     self.screen.blit(bs, (col_x, y))
-                y += 26
-            y += 14
+                y += S(26)
+            y += S(14)
 
-        bw, bh = 180, 44
-        self.back_rect = pygame.Rect(40, SCREEN_HEIGHT - bh - 30, bw, bh)
-        pygame.draw.rect(self.screen, (60, 60, 60), self.back_rect, border_radius=8)
-        pygame.draw.rect(self.screen, th.brass_500, self.back_rect, 2, border_radius=8)
+        bw, bh = S(180), S(44)
+        self.back_rect = pygame.Rect(S(40), SCREEN_HEIGHT - bh - S(30), bw, bh)
+        pygame.draw.rect(self.screen, (60, 60, 60), self.back_rect, border_radius=S(8))
+        pygame.draw.rect(self.screen, th.brass_500, self.back_rect, max(1, S(2)), border_radius=S(8))
         bs = self._head_font.render("← Back", True, th.text_white)
         self.screen.blit(bs, bs.get_rect(center=self.back_rect.center))
 
         scroll_hint = self._body_font.render("↑↓ scroll  ·  Esc back",
                                               True, th.text_dim)
-        self.screen.blit(scroll_hint, (SCREEN_WIDTH - scroll_hint.get_width() - 30,
-                                        SCREEN_HEIGHT - 40))
+        self.screen.blit(scroll_hint, (SCREEN_WIDTH - scroll_hint.get_width() - S(30),
+                                        SCREEN_HEIGHT - S(40)))
 
     def handle_event(self, event):
         if event.type == pygame.KEYDOWN:
             if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
                 return "back"
             if event.key == pygame.K_DOWN:
-                self.scroll = min(self.scroll + 40, 800)
+                self.scroll = min(self.scroll + S(40), S(800))
             if event.key == pygame.K_UP:
-                self.scroll = max(self.scroll - 40, 0)
+                self.scroll = max(self.scroll - S(40), 0)
         if event.type == pygame.MOUSEWHEEL:
-            self.scroll = max(0, min(800, self.scroll - event.y * 30))
+            self.scroll = max(0, min(S(800), self.scroll - event.y * S(30)))
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self.back_rect and self.back_rect.collidepoint(event.pos):
                 return "back"
