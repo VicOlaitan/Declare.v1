@@ -791,9 +791,11 @@ def main():
         screen.fill(BG_DARK)
 
         if current_screen == "menu":
+            menu_screen.update(dt)
             menu_screen.draw()
 
         elif current_screen == "setup":
+            setup_screen.update(dt)
             setup_screen.draw()
 
         elif current_screen == "peek":
