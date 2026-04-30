@@ -162,14 +162,14 @@ def _render_card_face_to_surface(renderer, surface, card, w, h, alpha):
     bg = (255, 255, 255, min(255, alpha))
     pygame.draw.rect(surface, bg, rect, border_radius=CORNER_RADIUS)
     color_r = (200, 30, 30, alpha) if card.is_red else (0, 0, 0, alpha)
-    big_font = pygame.font.SysFont("arial", max(12, int(28 * w / CARD_WIDTH)), bold=True)
-    small_font = pygame.font.SysFont("arial", max(8, int(14 * w / CARD_WIDTH)))
+    big_font = pygame.font.SysFont("arial", max(12, int(28 * w / 80)), bold=True)
+    small_font = pygame.font.SysFont("arial", max(8, int(14 * w / 80)))
     text = f"{card.rank}{card.suit_symbol}"
     big_surf = big_font.render(card.rank, True, color_r[:3])
-    big_rect = big_surf.get_rect(center=(w // 2, h // 2 - int(8 * h / CARD_HEIGHT)))
+    big_rect = big_surf.get_rect(center=(w // 2, h // 2 - int(8 * h / 112)))
     surface.blit(big_surf, big_rect)
     suit_surf = small_font.render(card.suit_symbol, True, color_r[:3])
-    suit_rect = suit_surf.get_rect(center=(w // 2, h // 2 + int(16 * h / CARD_HEIGHT)))
+    suit_rect = suit_surf.get_rect(center=(w // 2, h // 2 + int(16 * h / 112)))
     surface.blit(suit_surf, suit_rect)
     tl_surf = small_font.render(text, True, color_r[:3])
     surface.blit(tl_surf, (4, 3))
@@ -182,11 +182,8 @@ def _render_card_back_to_surface(renderer, surface, w, h, alpha):
     pygame.draw.rect(surface, bg, rect, border_radius=CORNER_RADIUS)
     inner = pygame.Rect(4, 4, w - 8, h - 8)
     pygame.draw.rect(surface, (40, 80, 150, min(255, alpha)), inner, border_radius=max(1, CORNER_RADIUS - 2))
-    cx, cy = w // 2, h // 2
-    d = min(w, h) // 3
-    pts = [(cx, cy - d), (cx + d * 2 // 3, cy), (cx, cy + d), (cx - d * 2 // 3, cy)]
-    pygame.draw.polygon(surface, (80, 120, 190, min(255, alpha)), pts)
-    pygame.draw.polygon(surface, (255, 255, 255, min(200, alpha)), pts, 1)
+    scale = w / 80.0
+    renderer._draw_card_back_medallion(surface, w // 2, h // 2, scale)
     pygame.draw.rect(surface, (255, 255, 255, min(200, alpha)), rect, 1, border_radius=CORNER_RADIUS)
 
 

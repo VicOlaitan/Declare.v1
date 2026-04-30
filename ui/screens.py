@@ -223,7 +223,7 @@ class SetupScreen:
             y = 250 + i * 90
             config = self.players_config[i]
             num_label = self.label_font.render(f"Player {i + 1}:", True, TEXT_WHITE)
-            self.screen.blit(num_label, (200, y - 12))
+            self.screen.blit(num_label, (150, y - 12))
             name_rect = pygame.Rect(340, y - 18, 380, 36)
             border_color = HIGHLIGHT if self.active_input == i else DIM
             pygame.draw.rect(self.screen, CARD_WHITE, name_rect, border_radius=CORNER_RADIUS)

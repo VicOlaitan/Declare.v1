@@ -78,6 +78,7 @@ class Renderer:
         self.small_font = pygame.font.SysFont("arial", SMALL_FONT_SIZE)
         self.hovered_card = None
         self.hovered_button = None
+        self.hovered_slot = None
         self.peek_reveal = None
         self._pulse_time = 0.0
         self.animation_queue = AnimationQueue()
@@ -95,20 +96,31 @@ class Renderer:
         if game_manager.drawn_card:
             self.draw_drawn_card(game_manager.drawn_card)
         num_players = len(game_manager.players)
+        current_player_index = game_manager.current_player_index
         for player in game_manager.players:
             pos = _get_seat_position(player.seat_index, num_players)
-            is_current = player.seat_index == game_manager.current_player_index
+            is_current = player.seat_index == current_player_index
             is_human = player.is_human
             self.draw_player_area(player, pos, is_current, is_human, game_manager, mouse_pos)
         self.draw_peek_reveal()
-        self.draw_game_log(game_manager.game_log)
+        if game_settings := self.game_settings:
+            if game_settings.show_game_log:
+                self.draw_game_log(game_manager.game_log)
         if action_buttons:
+            self._draw_action_bar_container()
             self.draw_action_buttons(action_buttons)
         if cancel_button:
             self._draw_cancel_button(cancel_button, mouse_pos)
         if status_message:
             self.draw_status_message(status_message)
         self.animation_queue.draw(self.screen, self)
+
+    def _draw_action_bar_container(self):
+        container_rect = pygame.Rect(0, ACTION_BAR_Y - 8, SCREEN_WIDTH, ACTION_BAR_H + 16)
+        container_surf = pygame.Surface((container_rect.width, container_rect.height), pygame.SRCALPHA)
+        pygame.draw.rect(container_surf, (*BG_DARK, 200), container_surf.get_rect(), border_radius=8)
+        self.screen.blit(container_surf, container_rect.topleft)
+        pygame.draw.rect(self.screen, PANEL_BORDER, container_rect, 1, border_radius=8)
 
     def _draw_table_felt(self):
         center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
@@ -375,33 +387,34 @@ class Renderer:
         dot = pygame.Rect(cx - 2, cy - 2, 4, 4)
         pygame.draw.rect(surface, hi, dot, border_radius=1)
 
-    def draw_card_back(self, x, y, has_known_marker=False):
+    def draw_card_back(self, x, y, has_known_marker=False, hovered=False):
         rect = pygame.Rect(x, y, CARD_WIDTH, CARD_HEIGHT)
-        self._draw_shadow(x, y)
+        lift_y = -4 if hovered else 0
+        self._draw_shadow(x, y + lift_y)
 
         gradient_surf = pygame.Surface((CARD_WIDTH, CARD_HEIGHT), pygame.SRCALPHA)
         for i in range(CARD_WIDTH):
             t = i / CARD_WIDTH
             alpha = int(20 + 25 * t)
             pygame.draw.line(gradient_surf, (20, 45, 95, alpha), (i, 0), (i, CARD_HEIGHT))
-        self.screen.blit(gradient_surf, (x, y))
+        self.screen.blit(gradient_surf, (x, y + lift_y))
 
         self._draw_rounded_rect(self.screen, CARD_BACK_BLUE, rect, CORNER_RADIUS)
 
         inner = pygame.Rect(x + 6, y + 6, CARD_WIDTH - 12, CARD_HEIGHT - 12)
         pygame.draw.rect(self.screen, CARD_BACK_PATTERN, inner, border_radius=CORNER_RADIUS - 2)
 
-        self._draw_card_back_crosshatch(x, y)
+        self._draw_card_back_crosshatch(x, y + lift_y)
 
         dcx = x + CARD_WIDTH // 2
-        dcy = y + CARD_HEIGHT // 2
+        dcy = y + CARD_HEIGHT // 2 + lift_y
         self._draw_card_back_medallion(self.screen, dcx, dcy)
 
         pygame.draw.rect(self.screen, TEXT_WHITE, rect, 1, border_radius=CORNER_RADIUS)
 
         if has_known_marker:
             badge_x = x + CARD_WIDTH - 16
-            badge_y = y + 4
+            badge_y = y + 4 + lift_y
             pygame.draw.circle(self.screen, GOLD, (badge_x, badge_y + 5), 6)
             pygame.draw.circle(self.screen, (255, 230, 80), (badge_x, badge_y + 5), 4)
             tri_pts = [(badge_x - 3, badge_y + 8), (badge_x + 3, badge_y + 8), (badge_x, badge_y + 13)]
@@ -499,6 +512,15 @@ class Renderer:
         layout = getattr(player, 'layout_mode', 'line')
         num_players = len(game_manager.players)
         card_positions = self._compute_card_positions(player, position, game_manager)
+        self.hovered_slot = None
+        if is_human:
+            for slot_index in range(HAND_SIZE):
+                if slot_index < len(card_positions):
+                    cx, cy = card_positions[slot_index]
+                    card_rect = pygame.Rect(cx, cy, CARD_WIDTH, CARD_HEIGHT)
+                    if card_rect.collidepoint(mouse_pos) and player.hand[slot_index] is not None:
+                        self.hovered_slot = slot_index
+                        break
 
         bounds = _player_area_bounds(player.seat_index, num_players)
         if layout == 'free':
@@ -512,13 +534,13 @@ class Renderer:
         name_rect = name_surf.get_rect(center=(px, name_y))
         if is_current:
             alpha = int(80 + 40 * math.sin(self._pulse_time * 3))
-            glow_rect = name_rect.inflate(20, 10)
+            glow_rect = name_rect.inflate(24, 12)
             glow_surf = pygame.Surface((glow_rect.width, glow_rect.height), pygame.SRCALPHA)
-            pygame.draw.rect(glow_surf, (*GOLD, alpha), glow_surf.get_rect(), border_radius=6)
+            pygame.draw.rect(glow_surf, (*GOLD, alpha), glow_surf.get_rect(), border_radius=8)
             self.screen.blit(glow_surf, glow_rect.topleft)
-        pill_surf = pygame.Surface((name_rect.width + 16, name_rect.height + 8), pygame.SRCALPHA)
-        pygame.draw.rect(pill_surf, (*BG_DARK, 180), pill_surf.get_rect(), border_radius=6)
-        self.screen.blit(pill_surf, (name_rect.centerx - name_rect.width // 2 - 8, name_rect.centery - name_rect.height // 2 - 4))
+        pill_surf = pygame.Surface((name_rect.width + 32, name_rect.height + 16), pygame.SRCALPHA)
+        pygame.draw.rect(pill_surf, (*BG_DARK, 180), pill_surf.get_rect(), border_radius=8)
+        self.screen.blit(pill_surf, (name_rect.centerx - name_rect.width // 2 - 16, name_rect.centery - name_rect.height // 2 - 8))
         self.screen.blit(name_surf, name_rect)
         info_y = name_y + name_surf.get_height() + 4
         if is_human:
@@ -539,11 +561,12 @@ class Renderer:
             if self.dragging_card is not None and self.dragging_card == slot_index and is_human:
                 continue
 
+            hovered = is_human and self.hovered_slot == slot_index
             if card is None:
                 self.draw_empty_slot(cx, cy)
             elif is_human:
                 has_marker = slot_index in player.known_cards
-                self.draw_card_back(cx, cy, has_known_marker=has_marker)
+                self.draw_card_back(cx, cy, has_known_marker=has_marker, hovered=hovered)
             else:
                 self.draw_card_back(cx, cy, has_known_marker=False)
 
@@ -554,7 +577,7 @@ class Renderer:
                 dx, dy = self.drag_pos
                 drag_surf = pygame.Surface((CARD_WIDTH, CARD_HEIGHT), pygame.SRCALPHA)
                 if slot_index in player.known_cards:
-                    self._render_card_face_on_surface(drag_surf, card)
+                    self._render_card_face_on_surface(drag_surf, card, show_pips=False)
                 else:
                     self._render_card_back_on_surface(drag_surf)
                 drag_surf.set_alpha(200)
@@ -676,7 +699,7 @@ class Renderer:
             if i not in player.card_positions:
                 player.card_positions[i] = p
 
-    def _render_card_face_on_surface(self, surface, card):
+    def _render_card_face_on_surface(self, surface, card, show_pips=True):
         rect = surface.get_rect()
         pygame.draw.rect(surface, CARD_WHITE, rect, border_radius=CORNER_RADIUS)
         color = RED if card.is_red else BLACK
@@ -684,7 +707,8 @@ class Renderer:
         inner_rect = pygame.Rect(4, 4, rect.width - 8, rect.height - 8)
         pygame.draw.rect(surface, (225, 225, 230), inner_rect, 1, border_radius=CORNER_RADIUS - 2)
 
-        self._draw_suit_pips(0, 0, card)
+        if show_pips:
+            self._draw_suit_pips(0, 0, card)
 
         big_surf = self.card_big_font.render(card.rank, True, color)
         big_rect = big_surf.get_rect(center=(rect.width // 2 + 8, rect.height // 2 - 8))
@@ -842,7 +866,6 @@ class Renderer:
                         (rect.left + 3, rect.top + 3), (rect.right - 3, rect.top + 3), 2)
         pygame.draw.line(self.screen, (l_r, l_g, l_b),
                         (rect.left + 3, rect.top + 3), (rect.left + 3, rect.bottom - 3), 2)
-        self._draw_rounded_rect(self.screen, color, rect, 8)
         pygame.draw.rect(self.screen, TEXT_WHITE, rect, 1, border_radius=8)
         text_surf = self.ui_font.render(cancel_button.get('text', 'Cancel'), True, TEXT_WHITE)
         text_rect = text_surf.get_rect(center=rect.center)
@@ -1232,16 +1255,7 @@ class Renderer:
         self.screen.blit(shadow_surf, (x - 4, y - 2))
 
     def draw_gear_icon(self, mouse_pos, settings_open=False):
-        rect = pygame.Rect(SCREEN_WIDTH - 52, 8, 40, 34)
-        hovered = rect.collidepoint(mouse_pos) and not settings_open
-        color = (160, 160, 160) if hovered else (100, 100, 100)
-        bg_color = (30, 30, 30) if hovered else (20, 20, 20)
-        bg_rect = pygame.Rect(rect.x - 4, rect.y - 4, rect.width + 8, rect.height + 8)
-        self._draw_rounded_rect(self.screen, bg_color, bg_rect, 6)
-        gear_surf = self.ui_font.render('\u2699', True, color)
-        gear_rect = gear_surf.get_rect(center=rect.center)
-        self.screen.blit(gear_surf, gear_rect)
-        return rect
+        pass
 
     def get_gear_rect(self):
         return pygame.Rect(SCREEN_WIDTH - 52, 8, 40, 34)
