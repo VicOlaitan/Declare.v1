@@ -1,6 +1,7 @@
 import pygame
 import sys
 import os
+import math
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))))
 
@@ -8,7 +9,7 @@ from config import (
     SCREEN_WIDTH, SCREEN_HEIGHT, BG_DARK, BG_GRADIENT_TOP, BG_GRADIENT_BOTTOM,
     CARD_WHITE, CARD_BACK_BLUE, CARD_BACK_PATTERN, CARD_BACK_MEDALLION,
     CARD_BACK_MEDALLION_HI, CARD_BACK_MEDALLION_LO, CARD_SHADOW, BLACK, RED, GOLD,
-    TEXT_WHITE, TEXT_BLACK, TEXT_DIM, HIGHLIGHT, DIM, PANEL_BG, PANEL_BORDER,
+    GOLD_HOVER, TEXT_WHITE, TEXT_BLACK, TEXT_DIM, TEXT_DIMMER, HIGHLIGHT, DIM, PANEL_BG, PANEL_BORDER,
     POWER_GLOW, EMPTY_SLOT, DECLARE_RED, DECLARE_RED_HOVER, SWAP_GREEN, SWAP_GREEN_HOVER,
     PEEK_BLUE, PEEK_BLUE_HOVER,
     CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS, CARD_SPREAD, HAND_SIZE, HAND_SIZE_OPTIONS,
@@ -17,57 +18,7 @@ from config import (
     TITLE_FONT_SIZE, SUBTITLE_FONT_SIZE, UI_FONT_SIZE, LOG_FONT_SIZE,
     SMALL_FONT_SIZE, CARD_FONT_SIZE, CARD_BIG_FONT_SIZE,
 )
-
-
-class Button:
-    def __init__(self, x, y, w, h, text, color, hover_color, text_color=TEXT_WHITE):
-        self.rect = pygame.Rect(x - w // 2, y - h // 2, w, h)
-        self.text = text
-        self.color = color
-        self.hover_color = hover_color
-        self.text_color = text_color
-        self.is_hovered = False
-
-    def draw(self, screen, font):
-        color = self.hover_color if self.is_hovered else self.color
-
-        shadow_surf = pygame.Surface((self.rect.width + 4, self.rect.height + 4), pygame.SRCALPHA)
-        pygame.draw.rect(shadow_surf, (0, 0, 0, 60), (2, 3, self.rect.width, self.rect.height), border_radius=CORNER_RADIUS)
-        screen.blit(shadow_surf, (self.rect.x - 2, self.rect.y + 3))
-
-        pygame.draw.rect(screen, color, self.rect, border_radius=CORNER_RADIUS)
-
-        c_r = max(color[0] - 35, 0)
-        c_g = max(color[1] - 35, 0)
-        c_b = max(color[2] - 35, 0)
-        pygame.draw.line(screen, (c_r, c_g, c_b),
-                         (self.rect.left + 3, self.rect.bottom - 3),
-                         (self.rect.right - 3, self.rect.bottom - 3), 2)
-        pygame.draw.line(screen, (c_r, c_g, c_b),
-                         (self.rect.right - 3, self.rect.top + 3),
-                         (self.rect.right - 3, self.rect.bottom - 3), 2)
-        l_r = min(color[0] + 40, 255)
-        l_g = min(color[1] + 40, 255)
-        l_b = min(color[2] + 40, 255)
-        pygame.draw.line(screen, (l_r, l_g, l_b),
-                         (self.rect.left + 3, self.rect.top + 3),
-                         (self.rect.right - 3, self.rect.top + 3), 2)
-        pygame.draw.line(screen, (l_r, l_g, l_b),
-                         (self.rect.left + 3, self.rect.top + 3),
-                         (self.rect.left + 3, self.rect.bottom - 3), 2)
-
-        pygame.draw.rect(screen, BLACK, self.rect, width=2, border_radius=CORNER_RADIUS)
-        text_surf = font.render(self.text, True, self.text_color)
-        text_rect = text_surf.get_rect(center=self.rect.center)
-        screen.blit(text_surf, text_rect)
-
-    def is_clicked(self, mouse_pos):
-        if pygame.mouse.get_pressed()[0] and self.rect.collidepoint(mouse_pos):
-            return True
-        return False
-
-    def update_hover(self, mouse_pos):
-        self.is_hovered = self.rect.collidepoint(mouse_pos)
+from ui.widgets import Button
 
 
 class MenuScreen:
@@ -77,8 +28,8 @@ class MenuScreen:
         self.subtitle_font = pygame.font.SysFont("segoeui", SUBTITLE_FONT_SIZE)
         self.button_font = pygame.font.SysFont("segoeui", UI_FONT_SIZE)
         self._time = 0.0
-        self.new_game_button = Button(SCREEN_WIDTH // 2, 460, 260, 54, "New Game", 'primary')
-        self.quit_button = Button(SCREEN_WIDTH // 2, 530, 260, 54, "Quit", 'red')
+        self.new_game_button = Button(SCREEN_WIDTH // 2, 460, 260, 54, "New Game", 'primary', font=self.button_font)
+        self.quit_button = Button(SCREEN_WIDTH // 2, 530, 260, 54, "Quit", 'red', font=self.button_font)
         self.buttons = [self.new_game_button, self.quit_button]
 
     def _draw_card_back_medallion(self, surface, cx, cy, scale=1.0):
@@ -215,19 +166,19 @@ class SetupScreen:
         self.player_count_btns = []
         for idx, count in enumerate([2, 3, 4]):
             bx = SCREEN_WIDTH // 2 - 100 + idx * 100
-            btn = Button(bx, 180, 80, 44, str(count), 'primary')
+            btn = Button(bx, 180, 80, 44, str(count), 'primary', font=self.button_font)
             self.player_count_btns.append(btn)
             self._all_buttons.append(btn)
         self._build_game_settings_buttons()
-        self.start_button = Button(SCREEN_WIDTH // 2, 700, 280, 54, "Start Game", 'primary')
-        self.back_button = Button(100, 770, 160, 44, "Back", 'red')
+        self.start_button = Button(SCREEN_WIDTH // 2, 700, 280, 54, "Start Game", 'primary', font=self.button_font)
+        self.back_button = Button(100, 770, 160, 44, "Back", 'red', font=self.input_font)
         self._all_buttons.extend([self.start_button, self.back_button])
 
     def _build_game_settings_buttons(self):
         self.hand_size_buttons = []
         for idx, size in enumerate(HAND_SIZE_OPTIONS):
             bx = SCREEN_WIDTH // 2 - 180 + idx * 75
-            btn = Button(bx, 0, 60, 36, str(size), 'primary')
+            btn = Button(bx, 0, 60, 36, str(size), 'primary', font=self.input_font)
             self.hand_size_buttons.append(btn)
             self._all_buttons.append(btn)
         self._rebuild_peek_count_buttons()
@@ -241,7 +192,7 @@ class SetupScreen:
         start_x = SCREEN_WIDTH // 2 - (count * 55) // 2 + 25
         for i in range(count):
             bx = start_x + i * 55
-            btn = Button(bx, 0, 48, 36, str(i), 'blue')
+            btn = Button(bx, 0, 48, 36, str(i), 'blue', font=self.input_font)
             self.peek_count_buttons.append(btn)
             self._all_buttons.append(btn)
 
@@ -249,7 +200,7 @@ class SetupScreen:
         config = self.players_config[index]
         text = "Human" if config["is_human"] else "AI"
         variant = 'primary' if config["is_human"] else 'blue'
-        btn = Button(820, y, 120, 36, text, variant)
+        btn = Button(820, y, 120, 36, text, variant, font=self.input_font)
         return btn
 
     def _settings_y(self):
@@ -298,7 +249,7 @@ class SetupScreen:
                 btn.base_color = SWAP_GREEN
                 btn.hover_color = SWAP_GREEN_HOVER
                 btn.text_color = TEXT_WHITE
-            btn.draw(self.screen, self.button_font)
+            btn.draw(self.screen)
 
         for i in range(self.num_players):
             y = 250 + i * 90
@@ -320,7 +271,7 @@ class SetupScreen:
                 toggle.variant = 'blue'
                 toggle.base_color = PEEK_BLUE
                 toggle.hover_color = PEEK_BLUE_HOVER
-            toggle.draw(self.screen, self.input_font)
+            toggle.draw(self.screen)
 
         if self.game_settings is not None:
             settings_y = self._settings_y()
@@ -344,7 +295,7 @@ class SetupScreen:
                     btn.base_color = SWAP_GREEN
                     btn.hover_color = SWAP_GREEN_HOVER
                     btn.text_color = TEXT_WHITE
-                btn.draw(self.screen, self.input_font)
+                btn.draw(self.screen)
 
             peek_y = hand_y + 50
             peek_label = self.input_font.render("Cards Visible:", True, TEXT_DIM)
@@ -361,10 +312,10 @@ class SetupScreen:
                     btn.base_color = PEEK_BLUE
                     btn.hover_color = PEEK_BLUE_HOVER
                     btn.text_color = TEXT_WHITE
-                btn.draw(self.screen, self.input_font)
+                btn.draw(self.screen)
 
-        self.start_button.draw(self.screen, self.button_font)
-        self.back_button.draw(self.screen, self.input_font)
+        self.start_button.draw(self.screen)
+        self.back_button.draw(self.screen)
 
     def update(self, dt):
         mouse_pos = pygame.mouse.get_pos()
@@ -436,7 +387,7 @@ class PeekScreen:
         self.screen = screen
         self.hand_size = hand_size
         self.peek_count = peek_count
-        self.title_font = pygame.font.SysFont("segoeui", TITLE_FONT_SIZE, bold=True)
+        self.title_font = pygame.font.SysFont("georgia", TITLE_FONT_SIZE, bold=True)
         self.subtitle_font = pygame.font.SysFont("segoeui", SUBTITLE_FONT_SIZE)
         self.label_font = pygame.font.SysFont("segoeui", UI_FONT_SIZE)
         self.button_font = pygame.font.SysFont("segoeui", UI_FONT_SIZE)
@@ -445,15 +396,19 @@ class PeekScreen:
         self.max_time = peek_seconds
         self.elapsed = 0.0
         self.revealed = True
-        self.done_button = Button(SCREEN_WIDTH // 2, 500, 300, 54, "I've memorized them!", SWAP_GREEN, SWAP_GREEN_HOVER)
+        self.done_button = Button(SCREEN_WIDTH // 2, 500, 300, 54, "I've memorized them!", 'primary', font=self.button_font)
+        self._all_buttons = [self.done_button]
+        self._time = 0.0
 
     def _draw_card_face(self, x, y, card, glow=False):
         rect = pygame.Rect(x, y, CARD_WIDTH, CARD_HEIGHT)
         if glow:
-            glow_rect = pygame.Rect(x - 4, y - 4, CARD_WIDTH + 8, CARD_HEIGHT + 8)
-            pygame.draw.rect(self.screen, HIGHLIGHT, glow_rect, border_radius=CORNER_RADIUS + 2)
+            glow_rect = pygame.Rect(x - 5, y - 5, CARD_WIDTH + 10, CARD_HEIGHT + 10)
+            glow_surf = pygame.Surface((glow_rect.width, glow_rect.height), pygame.SRCALPHA)
+            pygame.draw.rect(glow_surf, (*GOLD, 80), glow_surf.get_rect(), border_radius=CORNER_RADIUS + 4)
+            self.screen.blit(glow_surf, (glow_rect.x, glow_rect.y))
         pygame.draw.rect(self.screen, CARD_WHITE, rect, border_radius=CORNER_RADIUS)
-        pygame.draw.rect(self.screen, BLACK, rect, width=2, border_radius=CORNER_RADIUS)
+        pygame.draw.rect(self.screen, (40, 40, 45), rect, width=1, border_radius=CORNER_RADIUS)
         color = RED if card.is_red else BLACK
         rank_surf = self.card_font.render(card.rank, True, color)
         self.screen.blit(rank_surf, (x + 6, y + 4))
@@ -467,38 +422,53 @@ class PeekScreen:
         rect = pygame.Rect(x, y, CARD_WIDTH, CARD_HEIGHT)
         base_color = tuple(c // 2 for c in CARD_BACK_BLUE) if dimmed else CARD_BACK_BLUE
         pygame.draw.rect(self.screen, base_color, rect, border_radius=CORNER_RADIUS)
-        pygame.draw.rect(self.screen, BLACK, rect, width=2, border_radius=CORNER_RADIUS)
+        pygame.draw.rect(self.screen, (40, 40, 45), rect, width=1, border_radius=CORNER_RADIUS)
         inner = pygame.Rect(x + 8, y + 8, CARD_WIDTH - 16, CARD_HEIGHT - 16)
         inner_color = tuple(c // 2 for c in CARD_BACK_PATTERN) if dimmed else CARD_BACK_PATTERN
         pygame.draw.rect(self.screen, inner_color, inner, border_radius=4)
 
     def draw(self, game_manager):
         self.screen.fill(BG_DARK)
+        gradient = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        for y in range(SCREEN_HEIGHT):
+            t = y / SCREEN_HEIGHT
+            r = int(BG_GRADIENT_TOP[0] + (BG_GRADIENT_BOTTOM[0] - BG_GRADIENT_TOP[0]) * t)
+            g = int(BG_GRADIENT_TOP[1] + (BG_GRADIENT_BOTTOM[1] - BG_GRADIENT_TOP[1]) * t)
+            b = int(BG_GRADIENT_TOP[2] + (BG_GRADIENT_BOTTOM[2] - BG_GRADIENT_TOP[2]) * t)
+            for x in range(SCREEN_WIDTH):
+                gradient.set_at((x, y), (r, g, b))
+        self.screen.blit(gradient, (0, 0))
+
         title_surf = self.title_font.render("PEEK PHASE", True, GOLD)
+        shadow = self.title_font.render("PEEK PHASE", True, (40, 25, 5))
+        self.screen.blit(shadow, shadow.get_rect(center=(SCREEN_WIDTH // 2 + 2, 82)))
         self.screen.blit(title_surf, title_surf.get_rect(center=(SCREEN_WIDTH // 2, 80)))
+
         if self.peek_count == 0:
             subtitle_text = "Blind start — no cards visible!"
         elif self.peek_count >= self.hand_size:
             subtitle_text = "All cards are face up!"
         else:
             subtitle_text = f"Memorize your bottom {self.peek_count} cards!"
-        subtitle_surf = self.subtitle_font.render(subtitle_text, True, TEXT_WHITE)
+        subtitle_surf = self.subtitle_font.render(subtitle_text, True, TEXT_DIM)
         self.screen.blit(subtitle_surf, subtitle_surf.get_rect(center=(SCREEN_WIDTH // 2, 130)))
+
         bar_w = 400
-        bar_h = 20
+        bar_h = 16
         bar_x = (SCREEN_WIDTH - bar_w) // 2
         bar_y = 170
         remaining = max(0, 1.0 - self.elapsed / self.max_time)
-        pygame.draw.rect(self.screen, DIM, (bar_x, bar_y, bar_w, bar_h), border_radius=6)
+        pygame.draw.rect(self.screen, (40, 40, 45), (bar_x, bar_y, bar_w, bar_h), border_radius=8)
         fill_w = int(bar_w * remaining)
         if fill_w > 0:
-            r = int(220 * (1 - remaining) + 40 * remaining)
-            g = int(40 * (1 - remaining) + 180 * remaining)
-            b = int(40 * (1 - remaining) + 60 * remaining)
-            pygame.draw.rect(self.screen, (r, g, b), (bar_x, bar_y, fill_w, bar_h), border_radius=6)
-        pygame.draw.rect(self.screen, TEXT_DIM, (bar_x, bar_y, bar_w, bar_h), width=2, border_radius=6)
+            r = int(50 + 170 * remaining)
+            g = int(180 * remaining)
+            b = int(60 * remaining)
+            pygame.draw.rect(self.screen, (r, g, b), (bar_x, bar_y, fill_w, bar_h), border_radius=8)
+        pygame.draw.rect(self.screen, (60, 60, 65), (bar_x, bar_y, bar_w, bar_h), width=1, border_radius=8)
+
         if game_manager is None:
-            self.done_button.draw(self.screen, self.button_font)
+            self.done_button.draw(self.screen)
             return
         human = None
         for p in game_manager.players:
@@ -506,7 +476,7 @@ class PeekScreen:
                 human = p
                 break
         if human is None:
-            self.done_button.draw(self.screen, self.button_font)
+            self.done_button.draw(self.screen)
             return
         hand_size = len(human.hand)
         peek_slots = set(range(max(0, hand_size - self.peek_count), hand_size))
@@ -524,20 +494,15 @@ class PeekScreen:
             else:
                 rect = pygame.Rect(cx, card_y, CARD_WIDTH, CARD_HEIGHT)
                 pygame.draw.rect(self.screen, EMPTY_SLOT, rect, border_radius=CORNER_RADIUS)
-            label = self.small_font.render(f"Slot {slot_idx + 1}", True, TEXT_DIM)
+            label = self.small_font.render(f"Slot {slot_idx + 1}", True, TEXT_DIMMER)
             self.screen.blit(label, label.get_rect(center=(cx + CARD_WIDTH // 2, card_y + CARD_HEIGHT + 20)))
-        self.done_button.draw(self.screen, self.button_font)
-
-    def handle_event(self, event):
-        if event.type == pygame.MOUSEMOTION:
-            self.done_button.update_hover(event.pos)
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if self.done_button.is_clicked(event.pos):
-                self.revealed = False
-                return 'peek_done'
-        return None
+        self.done_button.draw(self.screen)
 
     def update(self, dt):
+        self._time += dt
+        mouse_pos = pygame.mouse.get_pos()
+        for btn in self._all_buttons:
+            btn.update(dt, mouse_pos)
         if self.revealed:
             self.elapsed += dt
             if self.elapsed >= self.max_time:
@@ -545,23 +510,37 @@ class PeekScreen:
                 return 'peek_done'
         return None
 
+    def handle_event(self, event):
+        mouse_pos = pygame.mouse.get_pos()
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.done_button.contains(event.pos):
+                self.done_button.on_press()
+                self.revealed = False
+                return 'peek_done'
+        if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            for btn in self._all_buttons:
+                btn.on_release()
+        return None
+
 
 class GameOverScreen:
     def __init__(self, screen):
         self.screen = screen
-        self.title_font = pygame.font.SysFont("segoeui", TITLE_FONT_SIZE, bold=True)
+        self.title_font = pygame.font.SysFont("georgia", TITLE_FONT_SIZE, bold=True)
         self.label_font = pygame.font.SysFont("segoeui", UI_FONT_SIZE)
         self.button_font = pygame.font.SysFont("segoeui", UI_FONT_SIZE)
         self.card_font = pygame.font.SysFont("segoeui", CARD_FONT_SIZE, bold=True)
         self.small_font = pygame.font.SysFont("segoeui", SMALL_FONT_SIZE)
-        self.play_again_button = Button(320, 680, 240, 50, "Play Again", SWAP_GREEN, SWAP_GREEN_HOVER)
-        self.menu_button = Button(960, 680, 240, 50, "Main Menu", DECLARE_RED, DECLARE_RED_HOVER)
+        self.play_again_button = Button(320, 680, 240, 50, "Play Again", 'primary', font=self.button_font)
+        self.menu_button = Button(960, 680, 240, 50, "Main Menu", 'red', font=self.button_font)
         self.buttons = [self.play_again_button, self.menu_button]
+        self._all_buttons = list(self.buttons)
+        self._time = 0.0
 
     def _draw_card_face(self, x, y, card):
         rect = pygame.Rect(x, y, CARD_WIDTH, CARD_HEIGHT)
         pygame.draw.rect(self.screen, CARD_WHITE, rect, border_radius=CORNER_RADIUS)
-        pygame.draw.rect(self.screen, BLACK, rect, width=2, border_radius=CORNER_RADIUS)
+        pygame.draw.rect(self.screen, (40, 40, 45), rect, width=1, border_radius=CORNER_RADIUS)
         color = RED if card.is_red else BLACK
         rank_surf = self.card_font.render(card.rank, True, color)
         self.screen.blit(rank_surf, (x + 6, y + 4))
@@ -574,38 +553,51 @@ class GameOverScreen:
     def _draw_empty_slot(self, x, y):
         rect = pygame.Rect(x, y, CARD_WIDTH, CARD_HEIGHT)
         pygame.draw.rect(self.screen, EMPTY_SLOT, rect, border_radius=CORNER_RADIUS)
-        pygame.draw.rect(self.screen, BLACK, rect, width=1, border_radius=CORNER_RADIUS)
+        pygame.draw.rect(self.screen, (40, 40, 45), rect, width=1, border_radius=CORNER_RADIUS)
 
     def draw(self, game_manager, result=None):
         self.screen.fill(BG_DARK)
+        gradient = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        for y in range(SCREEN_HEIGHT):
+            t = y / SCREEN_HEIGHT
+            r = int(BG_GRADIENT_TOP[0] + (BG_GRADIENT_BOTTOM[0] - BG_GRADIENT_TOP[0]) * t)
+            g = int(BG_GRADIENT_TOP[1] + (BG_GRADIENT_BOTTOM[1] - BG_GRADIENT_TOP[1]) * t)
+            b = int(BG_GRADIENT_TOP[2] + (BG_GRADIENT_BOTTOM[2] - BG_GRADIENT_TOP[2]) * t)
+            for x in range(SCREEN_WIDTH):
+                gradient.set_at((x, y), (r, g, b))
+        self.screen.blit(gradient, (0, 0))
+
         title_surf = self.title_font.render("GAME OVER", True, GOLD)
+        shadow = self.title_font.render("GAME OVER", True, (40, 25, 5))
+        self.screen.blit(shadow, shadow.get_rect(center=(SCREEN_WIDTH // 2 + 2, 62)))
         self.screen.blit(title_surf, title_surf.get_rect(center=(SCREEN_WIDTH // 2, 60)))
+
         if result:
             if result.get("auto_win"):
                 announce_surf = self.label_font.render("Auto-win! A player has no cards!", True, TEXT_WHITE)
-                self.screen.blit(announce_surf, announce_surf.get_rect(center=(SCREEN_WIDTH // 2, 110)))
             elif result.get("winner"):
                 winner = result["winner"]
-                color = GOLD
                 announce_text = f"{winner.name} wins!"
-                announce_surf = self.label_font.render(announce_text, True, color)
-                self.screen.blit(announce_surf, announce_surf.get_rect(center=(SCREEN_WIDTH // 2, 110)))
+                announce_surf = self.label_font.render(announce_text, True, GOLD)
             elif result.get("declarer_won") is False:
-                announce_surf = self.label_font.render("The declarer lost!", True, RED)
-                self.screen.blit(announce_surf, announce_surf.get_rect(center=(SCREEN_WIDTH // 2, 110)))
+                announce_surf = self.label_font.render("The declarer lost!", True, DECLARE_RED)
             else:
                 announce_surf = self.label_font.render("It's a draw!", True, TEXT_WHITE)
-                self.screen.blit(announce_surf, announce_surf.get_rect(center=(SCREEN_WIDTH // 2, 110)))
+            self.screen.blit(announce_surf, announce_surf.get_rect(center=(SCREEN_WIDTH // 2, 110)))
+
         if game_manager is None:
             for button in self.buttons:
-                button.draw(self.screen, self.button_font)
+                button.draw(self.screen)
             return
+
         num_players = len(game_manager.players)
         scores = result.get("scores", {}) if result else {}
         section_width = SCREEN_WIDTH // num_players
         for i, player in enumerate(game_manager.players):
             px = section_width * i + section_width // 2
-            name_surf = self.label_font.render(player.name, True, TEXT_WHITE)
+            is_winner = result and result.get("winner") == player
+            name_color = GOLD if is_winner else TEXT_WHITE
+            name_surf = self.label_font.render(player.name, True, name_color)
             self.screen.blit(name_surf, name_surf.get_rect(center=(px, 160)))
             score_val = scores.get(player.seat_index, player.score if hasattr(player, 'score') else 0)
             score_surf = self.small_font.render(f"Score: {score_val}", True, GOLD)
@@ -620,16 +612,26 @@ class GameOverScreen:
                     self._draw_card_face(cx, cy, card)
                 else:
                     self._draw_empty_slot(cx, cy)
+
         for button in self.buttons:
-            button.draw(self.screen, self.button_font)
+            button.draw(self.screen)
+
+    def update(self, dt):
+        self._time += dt
+        mouse_pos = pygame.mouse.get_pos()
+        for btn in self._all_buttons:
+            btn.update(dt, mouse_pos)
 
     def handle_event(self, event):
-        if event.type == pygame.MOUSEMOTION:
-            for button in self.buttons:
-                button.update_hover(event.pos)
+        mouse_pos = pygame.mouse.get_pos()
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if self.play_again_button.is_clicked(event.pos):
+            if self.play_again_button.contains(event.pos):
+                self.play_again_button.on_press()
                 return 'play_again'
-            if self.menu_button.is_clicked(event.pos):
+            if self.menu_button.contains(event.pos):
+                self.menu_button.on_press()
                 return 'menu'
+        if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            for btn in self._all_buttons:
+                btn.on_release()
         return None
