@@ -6,13 +6,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pygame
 from config import (
     SCREEN_WIDTH, SCREEN_HEIGHT, FPS,
-    BG_GREEN, BG_DARK, CARD_WHITE, BLACK, RED, GOLD, TEXT_WHITE, TEXT_BLACK,
+    BG_DARK, CARD_WHITE, BLACK, RED, GOLD, TEXT_WHITE, TEXT_BLACK,
     TEXT_DIM, HIGHLIGHT, DIM, PANEL_BG, CARD_BACK_BLUE,
     DECLARE_RED, DECLARE_RED_HOVER, CANCEL_GRAY, CANCEL_GRAY_HOVER,
     PEEK_BLUE, PEEK_BLUE_HOVER, SWAP_GREEN, SWAP_GREEN_HOVER,
     DISCARD_ORANGE, DISCARD_ORANGE_HOVER, PAIR_TEAL, PAIR_TEAL_HOVER,
     STATUS_BAR_H, ACTION_BAR_Y, ACTION_BAR_H,
-    CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS, CARD_SPREAD, HAND_SIZE,
+    CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS, CARD_SPREAD,
     DECK_CENTER, DRAWN_CARD_POS, DISCARD_POS,
     PLAYER_BOTTOM, PLAYER_TOP, PLAYER_LEFT, PLAYER_RIGHT,
     LOG_PANEL_X, LOG_PANEL_Y, LOG_PANEL_W, LOG_PANEL_H,
@@ -154,8 +154,8 @@ def main():
 
     renderer = Renderer(screen)
     menu_screen = MenuScreen(screen)
-    setup_screen = SetupScreen(screen)
-    peek_screen = PeekScreen(screen, game_settings.peek_phase_seconds)
+    setup_screen = SetupScreen(screen, game_settings)
+    peek_screen = PeekScreen(screen, game_settings.hand_size, game_settings.peek_count, game_settings.peek_phase_seconds)
     game_over_screen = GameOverScreen(screen)
     settings_menu = SettingsMenu(screen)
 
@@ -221,7 +221,7 @@ def main():
                 action = menu_screen.handle_event(event)
                 if action == "new_game":
                     current_screen = "setup"
-                    setup_screen = SetupScreen(screen)
+                    setup_screen = SetupScreen(screen, game_settings)
                 elif action == "quit":
                     running = False
 
@@ -230,10 +230,19 @@ def main():
                 if action == "start_game":
                     game_over_result = None
                     configs = setup_screen.players_config[:setup_screen.num_players]
-                    game_manager = GameManager(configs)
+                    game_manager = GameManager(configs, game_settings)
                     game_manager.setup_game()
-                    peek_screen = PeekScreen(screen, game_settings.peek_phase_seconds)
-                    current_screen = "peek"
+                    if game_settings.peek_count == 0:
+                        game_manager.start_peek_phase()
+                        awaiting = None
+                        selected_slot = None
+                        turn_end_timer = 0
+                        ai_phase = 'idle'
+                        ai_timer = 0
+                        current_screen = "game"
+                    else:
+                        peek_screen = PeekScreen(screen, game_settings.hand_size, game_settings.peek_count, game_settings.peek_phase_seconds)
+                        current_screen = "peek"
                 elif action == "back":
                     current_screen = "menu"
 
@@ -341,7 +350,14 @@ def main():
                             awaiting = None
 
                         elif clicked_btn == 'declare':
-                            if game_settings.confirm_declare:
+                            if awaiting == 'confirm_declare':
+                                game_manager.execute_player_action("declare", {})
+                                game_manager.resolve_declaration()
+                                game_over_result = game_manager.declaration_result
+                                current_screen = "game_over"
+                                awaiting = None
+                                status_message = ""
+                            elif game_settings.confirm_declare:
                                 awaiting = 'confirm_declare'
                                 selected_slot = None
                                 swap_second_click = False
@@ -564,15 +580,6 @@ def main():
                                             continue
                                         break
 
-                            elif awaiting == 'confirm_declare':
-                                if clicked_btn == 'declare':
-                                    game_manager.execute_player_action("declare", {})
-                                    game_manager.resolve_declaration()
-                                    game_over_result = game_manager.declaration_result
-                                    current_screen = "game_over"
-                                awaiting = None
-                                status_message = ""
-
                         else:
                             human_player = game_manager.players[human_idx]
                             if human_idx is not None and cp.is_human and dragging_slot is None:
@@ -611,7 +618,7 @@ def main():
                 if action == "play_again":
                     game_over_result = None
                     current_screen = "setup"
-                    setup_screen = SetupScreen(screen)
+                    setup_screen = SetupScreen(screen, game_settings)
                 elif action == "menu":
                     game_over_result = None
                     current_screen = "menu"
@@ -781,7 +788,7 @@ def main():
             swap_second_click = False
             status_message = ""
 
-        screen.fill(BG_GREEN)
+        screen.fill(BG_DARK)
 
         if current_screen == "menu":
             menu_screen.draw()
@@ -805,7 +812,7 @@ def main():
                 current_screen = "menu"
             else:
                 cp = game_manager.current_player()
-                action_buttons = _build_action_buttons(game_manager, ui_font)
+                action_buttons = _build_action_buttons(game_manager, ui_font) if cp.is_human else {}
                 cancel_btn = None
                 if awaiting is not None and cp.is_human:
                     cancel_btn = _build_cancel_button("Cancel", ui_font)

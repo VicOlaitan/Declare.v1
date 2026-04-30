@@ -4,11 +4,11 @@ from game.card import Card
 
 
 class Player:
-    def __init__(self, name: str, is_human: bool, seat_index: int):
+    def __init__(self, name: str, is_human: bool, seat_index: int, hand_size: int = HAND_SIZE):
         self.name = name
         self.is_human = is_human
         self.seat_index = seat_index
-        self.hand: list = [None] * HAND_SIZE
+        self.hand: list = [None] * hand_size
         self.known_cards: dict = {}
         self.known_opponent_cards: dict = {}
         self.has_peeked_initial: bool = False
@@ -55,11 +55,11 @@ class Player:
 
 
 class HumanPlayer(Player):
-    def __init__(self, name: str, seat_index: int):
-        super().__init__(name, is_human=True, seat_index=seat_index)
+    def __init__(self, name: str, seat_index: int, hand_size: int = HAND_SIZE):
+        super().__init__(name, is_human=True, seat_index=seat_index, hand_size=hand_size)
 
 
 class AIPlayer(Player):
-    def __init__(self, name: str, seat_index: int, difficulty: str = 'normal'):
-        super().__init__(name, is_human=False, seat_index=seat_index)
+    def __init__(self, name: str, seat_index: int, difficulty: str = 'normal', hand_size: int = HAND_SIZE):
+        super().__init__(name, is_human=False, seat_index=seat_index, hand_size=hand_size)
         self.difficulty = difficulty

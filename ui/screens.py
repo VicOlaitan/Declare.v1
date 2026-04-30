@@ -5,11 +5,11 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))))
 
 from config import (
-    SCREEN_WIDTH, SCREEN_HEIGHT, BG_GREEN, BG_DARK, CARD_WHITE, CARD_BACK_BLUE,
+    SCREEN_WIDTH, SCREEN_HEIGHT, BG_DARK, CARD_WHITE, CARD_BACK_BLUE,
     CARD_BACK_PATTERN, CARD_SHADOW, BLACK, RED, GOLD, TEXT_WHITE, TEXT_BLACK,
     TEXT_DIM, HIGHLIGHT, DIM, PANEL_BG, PANEL_BORDER, POWER_GLOW, EMPTY_SLOT,
-    DECLARE_RED, DECLARE_RED_HOVER, SWAP_GREEN, SWAP_GREEN_HOVER, PEEK_BLUE,
-    CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS, CARD_SPREAD, HAND_SIZE,
+    DECLARE_RED, DECLARE_RED_HOVER, SWAP_GREEN, SWAP_GREEN_HOVER, PEEK_BLUE, PEEK_BLUE_HOVER,
+    CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS, CARD_SPREAD, HAND_SIZE, HAND_SIZE_OPTIONS,
     DECK_CENTER, DRAWN_CARD_POS, DISCARD_POS,
     PLAYER_BOTTOM, PLAYER_TOP, PLAYER_LEFT, PLAYER_RIGHT,
     TITLE_FONT_SIZE, SUBTITLE_FONT_SIZE, UI_FONT_SIZE, LOG_FONT_SIZE,
@@ -174,8 +174,9 @@ class MenuScreen:
 
 
 class SetupScreen:
-    def __init__(self, screen, num_players=2):
+    def __init__(self, screen, game_settings=None, num_players=2):
         self.screen = screen
+        self.game_settings = game_settings
         self.title_font = pygame.font.SysFont("segoeui", TITLE_FONT_SIZE, bold=True)
         self.label_font = pygame.font.SysFont("segoeui", UI_FONT_SIZE)
         self.button_font = pygame.font.SysFont("segoeui", UI_FONT_SIZE)
@@ -191,8 +192,32 @@ class SetupScreen:
             self.player_count_buttons.append(
                 Button(bx, 180, 80, 44, str(count), SWAP_GREEN, SWAP_GREEN_HOVER)
             )
-        self.start_button = Button(SCREEN_WIDTH // 2, 620, 280, 54, "Start Game", SWAP_GREEN, SWAP_GREEN_HOVER)
-        self.back_button = Button(100, 690, 160, 44, "Back", DECLARE_RED, DECLARE_RED_HOVER)
+        self._build_game_settings_buttons()
+        self.start_button = Button(SCREEN_WIDTH // 2, 700, 280, 54, "Start Game", SWAP_GREEN, SWAP_GREEN_HOVER)
+        self.back_button = Button(100, 770, 160, 44, "Back", DECLARE_RED, DECLARE_RED_HOVER)
+
+    def _build_game_settings_buttons(self):
+        self.hand_size_buttons = []
+        for idx, size in enumerate(HAND_SIZE_OPTIONS):
+            bx = SCREEN_WIDTH // 2 - 180 + idx * 75
+            self.hand_size_buttons.append(
+                Button(bx, 0, 60, 36, str(size), SWAP_GREEN, SWAP_GREEN_HOVER)
+            )
+        self._rebuild_peek_count_buttons()
+
+    def _rebuild_peek_count_buttons(self):
+        self.peek_count_buttons = []
+        if self.game_settings is None:
+            return
+        hand_size = self.game_settings.hand_size
+        count = hand_size + 1
+        start_x = SCREEN_WIDTH // 2 - (count * 55) // 2 + 25
+        for i in range(count):
+            bx = start_x + i * 55
+            label = str(i)
+            self.peek_count_buttons.append(
+                Button(bx, 0, 48, 36, label, PEEK_BLUE, PEEK_BLUE_HOVER)
+            )
 
     def _get_toggle_button(self, index, y):
         config = self.players_config[index]
@@ -201,6 +226,9 @@ class SetupScreen:
         hover = SWAP_GREEN_HOVER if config["is_human"] else (100, 170, 250)
         btn = Button(820, y, 120, 36, text, color, hover)
         return btn
+
+    def _settings_y(self):
+        return 250 + self.num_players * 90 + 10
 
     def draw(self):
         self.screen.fill(BG_DARK)
@@ -232,12 +260,54 @@ class SetupScreen:
             self.screen.blit(name_surf, (name_rect.x + 8, name_rect.y + 8))
             toggle = self._get_toggle_button(i, y)
             toggle.draw(self.screen, self.input_font)
+
+        if self.game_settings is not None:
+            settings_y = self._settings_y()
+            section_surf = self.label_font.render("Game Settings", True, GOLD)
+            self.screen.blit(section_surf, section_surf.get_rect(center=(SCREEN_WIDTH // 2, settings_y)))
+            pygame.draw.line(self.screen, DIM, (SCREEN_WIDTH // 2 - 200, settings_y + 18),
+                             (SCREEN_WIDTH // 2 + 200, settings_y + 18), 1)
+
+            hand_y = settings_y + 36
+            hand_label = self.input_font.render("Cards per Hand:", True, TEXT_DIM)
+            self.screen.blit(hand_label, (SCREEN_WIDTH // 2 - 240, hand_y - 8))
+            for idx, btn in enumerate(self.hand_size_buttons):
+                btn.rect.centery = hand_y
+                if self.game_settings.hand_size == HAND_SIZE_OPTIONS[idx]:
+                    btn.color = GOLD
+                    btn.hover_color = (255, 230, 100)
+                    btn.text_color = TEXT_BLACK
+                else:
+                    btn.color = SWAP_GREEN
+                    btn.hover_color = SWAP_GREEN_HOVER
+                    btn.text_color = TEXT_WHITE
+                btn.draw(self.screen, self.input_font)
+
+            peek_y = hand_y + 50
+            peek_label = self.input_font.render("Cards Visible:", True, TEXT_DIM)
+            self.screen.blit(peek_label, (SCREEN_WIDTH // 2 - 240, peek_y - 8))
+            for idx, btn in enumerate(self.peek_count_buttons):
+                btn.rect.centery = peek_y
+                if self.game_settings.peek_count == idx:
+                    btn.color = GOLD
+                    btn.hover_color = (255, 230, 100)
+                    btn.text_color = TEXT_BLACK
+                else:
+                    btn.color = PEEK_BLUE
+                    btn.hover_color = PEEK_BLUE_HOVER
+                    btn.text_color = TEXT_WHITE
+                btn.draw(self.screen, self.input_font)
+
         self.start_button.draw(self.screen, self.button_font)
         self.back_button.draw(self.screen, self.input_font)
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEMOTION:
             for btn in self.player_count_buttons:
+                btn.update_hover(event.pos)
+            for btn in self.hand_size_buttons:
+                btn.update_hover(event.pos)
+            for btn in self.peek_count_buttons:
                 btn.update_hover(event.pos)
             self.start_button.update_hover(event.pos)
             self.back_button.update_hover(event.pos)
@@ -260,6 +330,19 @@ class SetupScreen:
                 elif self.active_input == i:
                     self.active_input = None
 
+            if self.game_settings is not None:
+                for idx, btn in enumerate(self.hand_size_buttons):
+                    if btn.is_clicked(event.pos):
+                        self.game_settings.hand_size = HAND_SIZE_OPTIONS[idx]
+                        if self.game_settings.peek_count > self.game_settings.hand_size:
+                            self.game_settings.peek_count = self.game_settings.hand_size
+                        self._rebuild_peek_count_buttons()
+                        return None
+                for idx, btn in enumerate(self.peek_count_buttons):
+                    if btn.is_clicked(event.pos):
+                        self.game_settings.peek_count = idx
+                        return None
+
             if self.start_button.is_clicked(event.pos):
                 return 'start_game'
             if self.back_button.is_clicked(event.pos):
@@ -278,8 +361,10 @@ class SetupScreen:
 
 
 class PeekScreen:
-    def __init__(self, screen, peek_seconds=5.0):
+    def __init__(self, screen, hand_size=4, peek_count=2, peek_seconds=5.0):
         self.screen = screen
+        self.hand_size = hand_size
+        self.peek_count = peek_count
         self.title_font = pygame.font.SysFont("segoeui", TITLE_FONT_SIZE, bold=True)
         self.subtitle_font = pygame.font.SysFont("segoeui", SUBTITLE_FONT_SIZE)
         self.label_font = pygame.font.SysFont("segoeui", UI_FONT_SIZE)
@@ -320,7 +405,13 @@ class PeekScreen:
         self.screen.fill(BG_DARK)
         title_surf = self.title_font.render("PEEK PHASE", True, GOLD)
         self.screen.blit(title_surf, title_surf.get_rect(center=(SCREEN_WIDTH // 2, 80)))
-        subtitle_surf = self.subtitle_font.render("Memorize your bottom 2 cards!", True, TEXT_WHITE)
+        if self.peek_count == 0:
+            subtitle_text = "Blind start — no cards visible!"
+        elif self.peek_count >= self.hand_size:
+            subtitle_text = "All cards are face up!"
+        else:
+            subtitle_text = f"Memorize your bottom {self.peek_count} cards!"
+        subtitle_surf = self.subtitle_font.render(subtitle_text, True, TEXT_WHITE)
         self.screen.blit(subtitle_surf, subtitle_surf.get_rect(center=(SCREEN_WIDTH // 2, 130)))
         bar_w = 400
         bar_h = 20
@@ -346,13 +437,15 @@ class PeekScreen:
         if human is None:
             self.done_button.draw(self.screen, self.button_font)
             return
-        total_spread = HAND_SIZE * CARD_WIDTH + (HAND_SIZE - 1) * (CARD_SPREAD + CARD_WIDTH - CARD_WIDTH)
-        start_x = SCREEN_WIDTH // 2 - (total_spread) // 2 - CARD_WIDTH // 2 + CARD_WIDTH // 2
+        hand_size = len(human.hand)
+        peek_slots = set(range(max(0, hand_size - self.peek_count), hand_size))
+        total_spread = hand_size * CARD_WIDTH + (hand_size - 1) * CARD_SPREAD
+        start_x = SCREEN_WIDTH // 2 - total_spread // 2
         card_y = 260
-        for slot_idx in range(HAND_SIZE):
-            cx = start_x + slot_idx * (CARD_WIDTH + CARD_SPREAD + CARD_WIDTH)
+        for slot_idx in range(hand_size):
+            cx = start_x + slot_idx * (CARD_WIDTH + CARD_SPREAD)
             card = human.hand[slot_idx]
-            is_peek_slot = slot_idx in (2, 3) and self.revealed
+            is_peek_slot = slot_idx in peek_slots and self.revealed
             if card is not None and is_peek_slot:
                 self._draw_card_face(cx, card_y, card, glow=True)
             elif card is not None:
@@ -446,8 +539,9 @@ class GameOverScreen:
             score_val = scores.get(player.seat_index, player.score if hasattr(player, 'score') else 0)
             score_surf = self.small_font.render(f"Score: {score_val}", True, GOLD)
             self.screen.blit(score_surf, score_surf.get_rect(center=(px, 190)))
-            card_start_x = px - (HAND_SIZE * CARD_WIDTH + (HAND_SIZE - 1) * CARD_SPREAD) // 2
-            for slot_idx in range(HAND_SIZE):
+            hand_size = len(player.hand)
+            card_start_x = px - (hand_size * CARD_WIDTH + (hand_size - 1) * CARD_SPREAD) // 2
+            for slot_idx in range(hand_size):
                 card = player.hand[slot_idx]
                 cx = card_start_x + slot_idx * (CARD_WIDTH + CARD_SPREAD)
                 cy = 220

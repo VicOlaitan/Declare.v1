@@ -1,6 +1,6 @@
 from enum import Enum
 
-from config import HAND_SIZE, MAX_PAIR_STACK, PEEK_REVEAL_SECONDS, POWER_LABELS
+from config import PEEK_REVEAL_SECONDS, POWER_LABELS
 from game.card import Card, Deck
 from game.player import Player, HumanPlayer, AIPlayer
 from game.rules import RulesEngine, get_valid_actions, resolve_declare, resolve_power, has_zero_cards, calculate_score
@@ -21,13 +21,15 @@ class GameState(Enum):
 
 
 class GameManager:
-    def __init__(self, player_configs: list[dict]):
+    def __init__(self, player_configs: list[dict], game_settings=None):
+        from game.settings import GameSettings
+        self.settings = game_settings if game_settings is not None else GameSettings()
         self.players: list[Player] = []
         for config in player_configs:
             if config["is_human"]:
-                self.players.append(HumanPlayer(config["name"], len(self.players)))
+                self.players.append(HumanPlayer(config["name"], len(self.players), self.settings.hand_size))
             else:
-                self.players.append(AIPlayer(config["name"], len(self.players), "medium"))
+                self.players.append(AIPlayer(config["name"], len(self.players), "medium", self.settings.hand_size))
         self.deck: Deck = None
         self.discard_pile: list[Card] = []
         self.rules_engine: RulesEngine = None
@@ -47,8 +49,9 @@ class GameManager:
         self.deck = Deck()
         self.discard_pile = []
         self.rules_engine = RulesEngine(self.players, self.deck, self.discard_pile)
+        hand_size = self.settings.hand_size
         for player in self.players:
-            for slot in range(HAND_SIZE):
+            for slot in range(hand_size):
                 card = self.deck.draw()
                 player.receive_card(card, slot)
         self.state = GameState.PEEK_PHASE
@@ -56,8 +59,11 @@ class GameManager:
         self.round_number = 1
 
     def start_peek_phase(self):
+        hand_size = self.settings.hand_size
+        peek_count = self.settings.peek_count
+        peek_slots = list(range(max(0, hand_size - peek_count), hand_size))
         for player in self.players:
-            for slot in [2, 3]:
+            for slot in peek_slots:
                 card = player.hand[slot]
                 if card is not None:
                     player.known_cards[slot] = card

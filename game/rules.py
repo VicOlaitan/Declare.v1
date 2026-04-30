@@ -1,4 +1,4 @@
-from config import HAND_SIZE, POWER_LABELS
+from config import POWER_LABELS
 from game.card import Card
 from game.player import Player
 

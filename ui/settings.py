@@ -1,15 +1,16 @@
 import pygame
 from config import (
-    SCREEN_WIDTH, SCREEN_HEIGHT, BG_GREEN, BG_DARK, CARD_WHITE, BLACK, RED,
+    SCREEN_WIDTH, SCREEN_HEIGHT, BG_DARK, CARD_WHITE, BLACK, RED,
     GOLD, TEXT_WHITE, TEXT_BLACK, TEXT_DIM, PANEL_BG, PANEL_BORDER,
     STATUS_BAR_H, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS,
     UI_FONT_SIZE, SMALL_FONT_SIZE,
     DEFAULT_AI_DELAY, DEFAULT_PEEK_REVEAL_TIME, DEFAULT_PEEK_PHASE_SECONDS,
     DEFAULT_ANIMATIONS_ENABLED, DEFAULT_SHOW_OWN_SCORE, DEFAULT_SHOW_KNOWN_MARKER,
-    DEFAULT_SHOW_GAME_LOG, DEFAULT_CONFIRM_DECLARE, DEFAULT_LAYOUT_MODE,
+    DEFAULT_SHOW_GAME_LOG, DEFAULT_CONFIRM_DECLARE, DEFAULT_LAYOUT_MODE, DEFAULT_FELT,
     AI_DELAY_OPTIONS, AI_DELAY_LABELS, PEEK_REVEAL_OPTIONS, PEEK_REVEAL_LABELS,
     ANIMATION_OPTIONS, ANIMATION_LABELS, LAYOUT_OPTIONS, LAYOUT_LABELS,
     AI_DIFFICULTY_OPTIONS, AI_DIFFICULTY_LABELS, PEEK_PHASE_OPTIONS, PEEK_PHASE_LABELS,
+    FELT_COLORS, FELT_LABELS,
 )
 
 
@@ -52,6 +53,19 @@ class SettingsMenu:
             bx = sx + i * 105
             self._controls.append({
                 'type': 'layout_btn', 'value': mode, 'label': label,
+                'rect': pygame.Rect(bx, sy, 100, btn_h)
+            })
+        sy += line_h + 12
+
+        self._controls.append({
+            'type': 'section', 'text': 'TABLE FELT',
+            'rect': pygame.Rect(sx, sy, 200, 20)
+        })
+        sy += 26
+        for i, (key, label) in enumerate(zip(FELT_COLORS.keys(), FELT_LABELS)):
+            bx = sx + i * 105
+            self._controls.append({
+                'type': 'felt_btn', 'value': key, 'label': label,
                 'rect': pygame.Rect(bx, sy, 100, btn_h)
             })
         sy += line_h + 12
@@ -217,6 +231,8 @@ class SettingsMenu:
                                 from ui.renderer import Renderer
                                 r = Renderer(self.screen)
                                 r.init_free_positions(hp, game_manager)
+                    elif ctype == 'felt_btn':
+                        game_settings.felt_style = ctrl['value']
                     elif ctype == 'ai_delay_btn':
                         game_settings.ai_delay = ctrl['value']
                     elif ctype == 'peek_reveal_btn':
@@ -269,6 +285,9 @@ class SettingsMenu:
             pts = [(cx - 5, cy - 7), (cx - 5, cy + 7), (cx + 7, cy)]
             pygame.draw.polygon(surface, color, pts)
             pygame.draw.polygon(surface, color, pts, 1)
+        elif icon_type == 'felt':
+            pygame.draw.ellipse(surface, color, (cx - 9, cy - 5, 18, 10), 1)
+            pygame.draw.ellipse(surface, color, (cx - 5, cy - 3, 10, 6), 1)
 
     def draw(self, game_settings, game_manager, mouse_pos):
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
@@ -295,6 +314,7 @@ class SettingsMenu:
 
         SECTION_ICONS = {
             'CARD LAYOUT': 'cards',
+            'TABLE FELT': 'felt',
             'GAME SPEED': 'speed',
             'AI DIFFICULTY': 'target',
             'DISPLAY': 'eye',
@@ -317,12 +337,14 @@ class SettingsMenu:
                 lbl_surf = self.small_font.render(ctrl['text'], True, TEXT_DIM)
                 self.screen.blit(lbl_surf, (rect.x, rect.y))
 
-            elif ctype in ('layout_btn', 'ai_delay_btn', 'peek_reveal_btn', 'anim_btn',
+            elif ctype in ('layout_btn', 'felt_btn', 'ai_delay_btn', 'peek_reveal_btn', 'anim_btn',
                           'ai_diff_btn', 'score_btn', 'marker_btn', 'log_btn',
                           'confirm_btn', 'peek_phase_btn'):
                 active = False
                 if ctype == 'layout_btn':
                     active = (game_settings.layout_mode == ctrl['value'])
+                elif ctype == 'felt_btn':
+                    active = (game_settings.felt_style == ctrl['value'])
                 elif ctype == 'ai_delay_btn':
                     active = abs(game_settings.ai_delay - ctrl['value']) < 0.05
                 elif ctype == 'peek_reveal_btn':
@@ -369,6 +391,12 @@ class SettingsMenu:
                 lbl_surf = self.small_font.render(ctrl['label'], True, txt_color)
                 lbl_rect = lbl_surf.get_rect(center=rect.center)
                 self.screen.blit(lbl_surf, lbl_rect)
+
+                if ctype == 'felt_btn':
+                    swatch_color = FELT_COLORS.get(ctrl['value'], (50, 50, 50))
+                    swatch_rect = pygame.Rect(rect.right + 6, rect.centery - 6, 12, 12)
+                    pygame.draw.rect(self.screen, swatch_color, swatch_rect, border_radius=3)
+                    pygame.draw.rect(self.screen, (80, 80, 80), swatch_rect, 1, border_radius=3)
 
             elif ctype == 'done_btn':
                 hovered = rect.collidepoint(mouse_pos)

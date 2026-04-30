@@ -3,7 +3,7 @@ from config import (
     DEFAULT_AI_DELAY, DEFAULT_PEEK_REVEAL_TIME, DEFAULT_PEEK_PHASE_SECONDS,
     DEFAULT_ANIMATIONS_ENABLED, DEFAULT_SHOW_OWN_SCORE, DEFAULT_SHOW_KNOWN_MARKER,
     DEFAULT_SHOW_GAME_LOG, DEFAULT_CONFIRM_DECLARE, DEFAULT_AI_DIFFICULTY,
-    DEFAULT_LAYOUT_MODE,
+    DEFAULT_LAYOUT_MODE, DEFAULT_HAND_SIZE, DEFAULT_PEEK_COUNT, DEFAULT_FELT,
 )
 
 
@@ -18,6 +18,9 @@ class GameSettings:
     show_game_log: bool = DEFAULT_SHOW_GAME_LOG
     confirm_declare: bool = DEFAULT_CONFIRM_DECLARE
     layout_mode: str = DEFAULT_LAYOUT_MODE
+    hand_size: int = DEFAULT_HAND_SIZE
+    peek_count: int = DEFAULT_PEEK_COUNT
+    felt_style: str = DEFAULT_FELT
     ai_difficulties: dict = field(default_factory=dict)
 
     def effective_anim_duration(self, base_duration: float) -> float:

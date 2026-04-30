@@ -1,11 +1,13 @@
 import math
+import random
 import pygame
-from config import (SCREEN_WIDTH, SCREEN_HEIGHT, BG_GREEN, BG_DARK, CARD_WHITE, CARD_BACK_BLUE,
-    CARD_BACK_PATTERN, CARD_SHADOW, BLACK, RED, GOLD, TEXT_WHITE, TEXT_BLACK, TEXT_DIM,
-    HIGHLIGHT, DIM, PANEL_BG, PANEL_BORDER, POWER_GLOW, EMPTY_SLOT, KNOWN_TINT,
-    DECLARE_RED, DECLARE_RED_HOVER, CANCEL_GRAY, CANCEL_GRAY_HOVER,
-    PEEK_BLUE, PEEK_BLUE_HOVER, SWAP_GREEN, SWAP_GREEN_HOVER,
-    DISCARD_ORANGE, DISCARD_ORANGE_HOVER, PAIR_TEAL, PAIR_TEAL_HOVER,
+from config import (SCREEN_WIDTH, SCREEN_HEIGHT, BG_DARK, BG_GRADIENT_TOP, BG_GRADIENT_BOTTOM,
+    CARD_WHITE, CARD_BACK_BLUE, CARD_BACK_PATTERN, CARD_BACK_MEDALLION,
+    CARD_BACK_MEDALLION_HI, CARD_BACK_MEDALLION_LO, CARD_SHADOW, BLACK, RED, GOLD,
+    TEXT_WHITE, TEXT_BLACK, TEXT_DIM, HIGHLIGHT, DIM, PANEL_BG, PANEL_BORDER,
+    POWER_GLOW, EMPTY_SLOT, KNOWN_TINT, DECLARE_RED, DECLARE_RED_HOVER,
+    CANCEL_GRAY, CANCEL_GRAY_HOVER, PEEK_BLUE, PEEK_BLUE_HOVER, SWAP_GREEN,
+    SWAP_GREEN_HOVER, DISCARD_ORANGE, DISCARD_ORANGE_HOVER, PAIR_TEAL, PAIR_TEAL_HOVER,
     STATUS_BAR_H, ACTION_BAR_Y, ACTION_BAR_H,
     CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS, CARD_SPREAD,
     DECK_CENTER, DRAWN_CARD_POS, DISCARD_POS,
@@ -13,12 +15,13 @@ from config import (SCREEN_WIDTH, SCREEN_HEIGHT, BG_GREEN, BG_DARK, CARD_WHITE, 
     LOG_PANEL_X, LOG_PANEL_Y, LOG_PANEL_W, LOG_PANEL_H,
     CARD_FONT_SIZE, CARD_BIG_FONT_SIZE, TITLE_FONT_SIZE, SUBTITLE_FONT_SIZE,
     UI_FONT_SIZE, LOG_FONT_SIZE, SMALL_FONT_SIZE,
-    POWER_LABELS, POWER_COLORS, HAND_SIZE,
+    POWER_LABELS, POWER_COLORS,
     CARD_GRID_SPACING_X, CARD_GRID_SPACING_Y, PLAYER_AREA_PADDING,
     ANIM_DRAW_DURATION, ANIM_SWAP_DURATION, ANIM_UNSEEN_SWAP_DURATION,
     ANIM_SEEN_SWAP_DURATION, ANIM_PEEK_LIFT_DURATION, ANIM_PAIR_FLY_DURATION,
     ANIM_DISCARD_DURATION, ANIM_NOTIFICATION_DURATION, ANIM_FLASH_DURATION,
-    PLAYER_AREA_2, PLAYER_AREA_3, PLAYER_AREA_4)
+    PLAYER_AREA_2, PLAYER_AREA_3, PLAYER_AREA_4,
+    FELT_COLORS, FELT_COLORS_LIGHT, DEFAULT_FELT)
 from game.card import Card
 from game.player import Player
 from game.game_manager import GameManager, GameState
@@ -85,15 +88,60 @@ class Renderer:
         self.dragging_card = None
         self.drag_pos = None
         self.game_settings = None
+        self._felt_cache = {}
+        self._felt_noise = None
+        self._generate_noise()
+
+    def _generate_noise(self):
+        random.seed(42)
+        self._felt_noise = pygame.Surface((256, 256), pygame.SRCALPHA)
+        for _ in range(800):
+            px = random.randint(0, 255)
+            py = random.randint(0, 255)
+            alpha = random.randint(5, 20)
+            size = random.randint(1, 2)
+            pygame.draw.circle(self._felt_noise, (255, 255, 255, alpha), (px, py), size)
+
+    def _get_felt_surface(self, felt_key):
+        if felt_key in self._felt_cache:
+            return self._felt_cache[felt_key]
+        base_color = FELT_COLORS.get(felt_key, FELT_COLORS[DEFAULT_FELT])
+        light_color = FELT_COLORS_LIGHT.get(felt_key, FELT_COLORS_LIGHT[DEFAULT_FELT])
+        surf = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        cx, cy = SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2
+        max_dist = math.sqrt(cx * cx + cy * cy)
+        for y in range(SCREEN_HEIGHT):
+            for x in range(SCREEN_WIDTH):
+                dist = math.sqrt((x - cx) ** 2 + (y - cy) ** 2)
+                t = min(dist / max_dist, 1.0)
+                r = int(base_color[0] + (light_color[0] - base_color[0]) * (1.0 - t * t))
+                g = int(base_color[1] + (light_color[1] - base_color[1]) * (1.0 - t * t))
+                b = int(base_color[2] + (light_color[2] - base_color[2]) * (1.0 - t * t))
+                surf.set_at((x, y), (r, g, b))
+        if self._felt_noise:
+            noise_area = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            for y in range(0, SCREEN_HEIGHT, 256):
+                for x in range(0, SCREEN_WIDTH, 256):
+                    noise_area.blit(self._felt_noise, (x, y))
+            surf.blit(noise_area, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
+        self._felt_cache[felt_key] = surf
+        return surf
+
+    def draw_background(self):
+        self.screen.fill(BG_DARK)
 
     def draw(self, game_manager, mouse_pos=(0, 0), action_buttons=None,
              cancel_button=None, status_message="", awaiting_target=None):
-        self.screen.fill(BG_GREEN)
+        felt_key = self.game_settings.felt_style if self.game_settings else DEFAULT_FELT
+        felt_surf = self._get_felt_surface(felt_key)
+        self.screen.blit(felt_surf, (0, 0))
+        self._draw_table_rail()
         self._draw_table_felt()
         self._draw_status_bar(game_manager)
         self.draw_discard(game_manager.discard_pile)
         self.draw_deck(game_manager.deck.remaining if game_manager.deck else 0)
-        if game_manager.drawn_card:
+        cp = game_manager.current_player()
+        if game_manager.drawn_card and cp.is_human:
             self.draw_drawn_card(game_manager.drawn_card)
         num_players = len(game_manager.players)
         current_player_index = game_manager.current_player_index
@@ -122,58 +170,48 @@ class Renderer:
         self.screen.blit(container_surf, container_rect.topleft)
         pygame.draw.rect(self.screen, PANEL_BORDER, container_rect, 1, border_radius=8)
 
+    def _draw_table_rail(self):
+        center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+        rx, ry = 620, 340
+        rail_w = 24
+        outer_rx = rx + rail_w
+        outer_ry = ry + rail_w
+        rail_surf = pygame.Surface((outer_rx * 2, outer_ry * 2), pygame.SRCALPHA)
+        pygame.draw.ellipse(rail_surf, (35, 22, 12, 220), (0, 0, outer_rx * 2, outer_ry * 2))
+        self.screen.blit(rail_surf, (center[0] - outer_rx, center[1] - outer_ry))
+        pygame.draw.ellipse(self.screen, (55, 35, 18, 180),
+                            (center[0] - outer_rx - 2, center[1] - outer_ry - 2,
+                             outer_rx * 2 + 4, outer_ry * 2 + 4), 2)
+
     def _draw_table_felt(self):
         center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
         rx, ry = 620, 340
         felt_surf = pygame.Surface((rx * 2, ry * 2), pygame.SRCALPHA)
-        pygame.draw.ellipse(felt_surf, (30, 95, 50, 80), (0, 0, rx * 2, ry * 2))
+        pygame.draw.ellipse(felt_surf, (20, 50, 35, 60), (0, 0, rx * 2, ry * 2))
         self.screen.blit(felt_surf, (center[0] - rx, center[1] - ry))
-        pygame.draw.ellipse(self.screen, (50, 130, 70), (center[0] - rx, center[1] - ry, rx * 2, ry * 2), 2)
-        pygame.draw.ellipse(self.screen, (35, 80, 45), (center[0] - rx - 8, center[1] - ry - 8, rx * 2 + 16, ry * 2 + 16), 4)
-
-        vignette_surf = pygame.Surface((rx * 2, ry * 2), pygame.SRCALPHA)
-        for i in range(0, 200, 4):
-            alpha = int(60 * (i / 200))
-            r = rx * 2 - i * 2
-            rh = ry * 2 - i
-            expanded_rect = pygame.Rect((rx * 2 - r) // 2, (ry * 2 - rh) // 2, r, rh)
-            pygame.draw.ellipse(vignette_surf, (20, 50, 30, alpha), expanded_rect)
-        self.screen.blit(vignette_surf, (center[0] - rx, center[1] - ry))
-
-        import random
-        random.seed(42)
-        felt_dot_surf = pygame.Surface((rx * 2, ry * 2), pygame.SRCALPHA)
-        for _ in range(250):
-            px = center[0] - rx + random.randint(0, rx * 2)
-            py = center[1] - ry + random.randint(0, ry * 2)
-            dx = px - center[0]
-            dy = py - center[1]
-            if (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) < 1:
-                alpha = random.randint(8, 22)
-                dot_size = random.randint(1, 2)
-                pygame.draw.circle(felt_dot_surf, (30, 100, 55, alpha), (px - center[0] + rx, py - center[1] + ry), dot_size)
-        self.screen.blit(felt_dot_surf, (center[0] - rx, center[1] - ry))
+        pygame.draw.ellipse(self.screen, (40, 90, 60, 100),
+                            (center[0] - rx, center[1] - ry, rx * 2, ry * 2), 2)
 
     def _draw_status_bar(self, game_manager):
         bar_rect = pygame.Rect(0, 0, SCREEN_WIDTH, STATUS_BAR_H)
         gradient_surf = pygame.Surface((SCREEN_WIDTH, STATUS_BAR_H))
         for i in range(STATUS_BAR_H):
             t = i / STATUS_BAR_H
-            r = int(22 + 12 * t)
-            g = int(52 + 22 * t)
-            b = int(28 + 14 * t)
+            r = int(18 + 8 * t)
+            g = int(22 + 12 * t)
+            b = int(28 + 10 * t)
             gradient_surf.set_at((0, i), (r, g, b))
             for j in range(1, SCREEN_WIDTH):
                 gradient_surf.set_at((j, i), (r, g, b))
         self.screen.blit(gradient_surf, (0, 0))
-        pygame.draw.line(self.screen, (60, 120, 70), (0, 0), (SCREEN_WIDTH, 0), 2)
-        pygame.draw.line(self.screen, (40, 80, 50), (0, 1), (SCREEN_WIDTH, 1), 1)
-        pygame.draw.line(self.screen, GOLD, (0, STATUS_BAR_H - 2), (SCREEN_WIDTH, STATUS_BAR_H - 2), 1)
-        pygame.draw.line(self.screen, (100, 55, 15), (0, STATUS_BAR_H - 1), (SCREEN_WIDTH, STATUS_BAR_H - 1), 1)
+        pygame.draw.line(self.screen, (40, 80, 55), (0, 0), (SCREEN_WIDTH, 0), 2)
+        pygame.draw.line(self.screen, (35, 60, 45), (0, 1), (SCREEN_WIDTH, 1), 1)
+        pygame.draw.line(self.screen, GOLD_DIM, (0, STATUS_BAR_H - 2), (SCREEN_WIDTH, STATUS_BAR_H - 2), 1)
+        pygame.draw.line(self.screen, (60, 40, 15), (0, STATUS_BAR_H - 1), (SCREEN_WIDTH, STATUS_BAR_H - 1), 1)
         state_label = STATE_LABELS.get(game_manager.state, str(game_manager.state.value))
         current_player = game_manager.current_player()
         avatar_rect = pygame.Rect(14, (STATUS_BAR_H - 28) // 2, 28, 28)
-        pygame.draw.circle(self.screen, (40, 70, 50), avatar_rect.center, 14)
+        pygame.draw.circle(self.screen, (30, 50, 40), avatar_rect.center, 14)
         pygame.draw.circle(self.screen, GOLD, avatar_rect.center, 14, 2)
         initial_surf = self.small_font.render(current_player.name[0].upper(), True, GOLD)
         initial_rect = initial_surf.get_rect(center=avatar_rect.center)
@@ -193,16 +231,16 @@ class Renderer:
         self._draw_shadow(x, y)
         bg_color = CARD_WHITE
         if hovered:
-            bg_color = (255, 255, 230)
+            bg_color = (252, 252, 248)
         self._draw_rounded_rect(self.screen, bg_color, rect, CORNER_RADIUS)
         color = RED if card.is_red else BLACK
 
         inner_rect = pygame.Rect(x + 4, y + 4, CARD_WIDTH - 8, CARD_HEIGHT - 8)
-        pygame.draw.rect(self.screen, (225, 225, 230), inner_rect, 1, border_radius=CORNER_RADIUS - 2)
+        pygame.draw.rect(self.screen, (235, 235, 232), inner_rect, 1, border_radius=CORNER_RADIUS - 2)
 
         accent_rect = pygame.Rect(x, y, 6, CARD_HEIGHT)
         accent_inner = pygame.Rect(x + 2, y + 2, 4, CARD_HEIGHT - 4)
-        pygame.draw.rect(self.screen, (200, 200, 205), accent_rect, border_radius=3)
+        pygame.draw.rect(self.screen, (210, 210, 208), accent_rect, border_radius=3)
         pygame.draw.rect(self.screen, color, accent_inner, border_radius=2)
 
         if show_pips:
@@ -352,9 +390,9 @@ class Renderer:
     def _draw_card_back_medallion(self, surface, cx, cy, scale=1.0):
         w, h = int(44 * scale), int(30 * scale)
         hw, hh = w // 2, h // 2
-        fill = (50, 85, 155)
-        hi = (190, 210, 240)
-        lo = (30, 55, 120)
+        fill = CARD_BACK_MEDALLION
+        hi = CARD_BACK_MEDALLION_HI
+        lo = CARD_BACK_MEDALLION_LO
 
         oval_rect = pygame.Rect(cx - hw, cy - hh, w, h)
         pygame.draw.ellipse(surface, fill, oval_rect)
@@ -395,8 +433,8 @@ class Renderer:
         gradient_surf = pygame.Surface((CARD_WIDTH, CARD_HEIGHT), pygame.SRCALPHA)
         for i in range(CARD_WIDTH):
             t = i / CARD_WIDTH
-            alpha = int(20 + 25 * t)
-            pygame.draw.line(gradient_surf, (20, 45, 95, alpha), (i, 0), (i, CARD_HEIGHT))
+            alpha = int(18 + 22 * t)
+            pygame.draw.line(gradient_surf, (18, 35, 70, alpha), (i, 0), (i, CARD_HEIGHT))
         self.screen.blit(gradient_surf, (x, y + lift_y))
 
         self._draw_rounded_rect(self.screen, CARD_BACK_BLUE, rect, CORNER_RADIUS)
@@ -416,9 +454,9 @@ class Renderer:
             badge_x = x + CARD_WIDTH - 16
             badge_y = y + 4 + lift_y
             pygame.draw.circle(self.screen, GOLD, (badge_x, badge_y + 5), 6)
-            pygame.draw.circle(self.screen, (255, 230, 80), (badge_x, badge_y + 5), 4)
+            pygame.draw.circle(self.screen, GOLD_HOVER, (badge_x, badge_y + 5), 4)
             tri_pts = [(badge_x - 3, badge_y + 8), (badge_x + 3, badge_y + 8), (badge_x, badge_y + 13)]
-            pygame.draw.polygon(self.screen, (200, 160, 0), tri_pts)
+            pygame.draw.polygon(self.screen, GOLD_DIM, tri_pts)
         return rect
 
     def _draw_card_back_crosshatch(self, x, y):
@@ -462,20 +500,20 @@ class Renderer:
             stack_count = min(remaining, 4)
             for i in range(stack_count):
                 shadow_rect = pygame.Rect(dx - i * 2, dy - i * 2, CARD_WIDTH, CARD_HEIGHT)
-                pygame.draw.rect(self.screen, (20, 45, 95), shadow_rect, border_radius=CORNER_RADIUS)
+                pygame.draw.rect(self.screen, (18, 35, 70), shadow_rect, border_radius=CORNER_RADIUS)
             top_rect = pygame.Rect(dx, dy, CARD_WIDTH, CARD_HEIGHT)
             gradient_surf = pygame.Surface((CARD_WIDTH, CARD_HEIGHT), pygame.SRCALPHA)
             for i in range(CARD_WIDTH):
                 t = i / CARD_WIDTH
-                alpha = int(20 + 25 * t)
-                pygame.draw.line(gradient_surf, (20, 45, 95, alpha), (i, 0), (i, CARD_HEIGHT))
+                alpha = int(18 + 22 * t)
+                pygame.draw.line(gradient_surf, (18, 35, 70, alpha), (i, 0), (i, CARD_HEIGHT))
             self.screen.blit(gradient_surf, (dx, dy))
             pygame.draw.rect(self.screen, CARD_BACK_BLUE, top_rect, border_radius=CORNER_RADIUS)
             inner = pygame.Rect(dx + 6, dy + 6, CARD_WIDTH - 12, CARD_HEIGHT - 12)
             pygame.draw.rect(self.screen, CARD_BACK_PATTERN, inner, border_radius=CORNER_RADIUS - 2)
             inner_x, inner_y = dx + 10, dy + 10
             inner_w, inner_h = CARD_WIDTH - 20, CARD_HEIGHT - 20
-            line_color = (50, 90, 170, 40)
+            line_color = (40, 70, 140, 35)
             cross_surf = pygame.Surface((inner_w, inner_h), pygame.SRCALPHA)
             for i in range(0, max(inner_w, inner_h), 12):
                 if i < inner_w:
@@ -514,7 +552,7 @@ class Renderer:
         card_positions = self._compute_card_positions(player, position, game_manager)
         self.hovered_slot = None
         if is_human:
-            for slot_index in range(HAND_SIZE):
+            for slot_index in range(len(player.hand)):
                 if slot_index < len(card_positions):
                     cx, cy = card_positions[slot_index]
                     card_rect = pygame.Rect(cx, cy, CARD_WIDTH, CARD_HEIGHT)
@@ -551,7 +589,7 @@ class Renderer:
         info_rect = info_surf.get_rect(center=(px, info_y))
         self.screen.blit(info_surf, info_rect)
 
-        for slot_index in range(HAND_SIZE):
+        for slot_index in range(len(player.hand)):
             card = player.hand[slot_index]
             if slot_index < len(card_positions):
                 cx, cy = card_positions[slot_index]
@@ -596,34 +634,40 @@ class Renderer:
         num_players = len(game_manager.players)
         positions = []
 
+        hand_size = len(player.hand)
+
         if layout == 'line':
-            total_width = HAND_SIZE * CARD_SPREAD + (CARD_WIDTH - CARD_SPREAD)
+            total_width = hand_size * CARD_SPREAD + (CARD_WIDTH - CARD_SPREAD)
             start_x = px - total_width // 2
             start_y = py - CARD_HEIGHT // 2 + 4
-            for i in range(HAND_SIZE):
+            for i in range(hand_size):
                 positions.append((start_x + i * CARD_SPREAD, start_y))
 
         elif layout == 'square':
-            grid_w = 2 * CARD_GRID_SPACING_X
-            grid_h = 2 * CARD_GRID_SPACING_Y
-            start_x = px - grid_w // 2
-            start_y = py - grid_h // 2 + 4
-            grid_positions = [
-                (start_x, start_y),
-                (start_x + CARD_GRID_SPACING_X, start_y),
-                (start_x, start_y + CARD_GRID_SPACING_Y),
-                (start_x + CARD_GRID_SPACING_X, start_y + CARD_GRID_SPACING_Y),
-            ]
-            for i in range(HAND_SIZE):
-                if i < len(grid_positions):
+            if hand_size == 4:
+                grid_w = 2 * CARD_GRID_SPACING_X
+                grid_h = 2 * CARD_GRID_SPACING_Y
+                start_x = px - grid_w // 2
+                start_y = py - grid_h // 2 + 4
+                grid_positions = [
+                    (start_x, start_y),
+                    (start_x + CARD_GRID_SPACING_X, start_y),
+                    (start_x, start_y + CARD_GRID_SPACING_Y),
+                    (start_x + CARD_GRID_SPACING_X, start_y + CARD_GRID_SPACING_Y),
+                ]
+                for i in range(hand_size):
                     positions.append(grid_positions[i])
-                else:
-                    positions.append((px, py))
+            else:
+                total_width = hand_size * CARD_SPREAD + (CARD_WIDTH - CARD_SPREAD)
+                start_x = px - total_width // 2
+                start_y = py - CARD_HEIGHT // 2 + 4
+                for i in range(hand_size):
+                    positions.append((start_x + i * CARD_SPREAD, start_y))
 
         elif layout == 'free':
-            default_positions = self._default_line_positions(px, py)
+            default_positions = self._default_line_positions(px, py, hand_size)
             stored = getattr(player, 'card_positions', {})
-            for i in range(HAND_SIZE):
+            for i in range(hand_size):
                 if i in stored and stored[i] is not None:
                     positions.append(stored[i])
                 elif i < len(default_positions):
@@ -636,12 +680,12 @@ class Renderer:
 
         return positions
 
-    def _default_line_positions(self, px, py):
-        total_width = HAND_SIZE * CARD_SPREAD + (CARD_WIDTH - CARD_SPREAD)
+    def _default_line_positions(self, px, py, hand_size=4):
+        total_width = hand_size * CARD_SPREAD + (CARD_WIDTH - CARD_SPREAD)
         start_x = px - total_width // 2
         start_y = py - CARD_HEIGHT // 2 + 4
         positions = []
-        for i in range(HAND_SIZE):
+        for i in range(hand_size):
             positions.append((start_x + i * CARD_SPREAD, start_y))
         return positions
 
@@ -888,7 +932,7 @@ class Renderer:
         pos = _get_seat_position(player.seat_index, num_players)
         card_positions = self._compute_card_positions(player, pos, game_manager)
         rects = []
-        for slot_index in range(HAND_SIZE):
+        for slot_index in range(len(player.hand)):
             if slot_index < len(card_positions):
                 cx, cy = card_positions[slot_index]
                 rects.append(pygame.Rect(cx, cy, CARD_WIDTH, CARD_HEIGHT))
