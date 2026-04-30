@@ -1,61 +1,50 @@
-import os
-
 SCREEN_WIDTH = 1600
 SCREEN_HEIGHT = 900
 FPS = 60
 AI_DELAY = 0.8
 PEEK_REVEAL_SECONDS = 2.5
 
-BG_DARK = (13, 17, 23)
-BG_GRADIENT_TOP = (18, 22, 30)
-BG_GRADIENT_BOTTOM = (10, 12, 16)
-
-CARD_WHITE = (248, 248, 245)
-CARD_BACK_BLUE = (22, 42, 72)
-CARD_BACK_PATTERN = (30, 55, 90)
-CARD_BACK_MEDALLION = (45, 75, 130)
-CARD_BACK_MEDALLION_HI = (180, 200, 240)
-CARD_BACK_MEDALLION_LO = (28, 48, 80)
-CARD_SHADOW = (10, 12, 16)
-BLACK = (26, 26, 26)
-RED = (196, 30, 58)
-GOLD = (201, 168, 76)
-GOLD_HOVER = (224, 192, 104)
-GOLD_DIM = (140, 115, 50)
-TEXT_WHITE = (232, 232, 232)
-TEXT_BLACK = (26, 26, 26)
-TEXT_DIM = (140, 140, 140)
-TEXT_DIMMER = (100, 100, 100)
-HIGHLIGHT = (224, 192, 104)
-DIM = (80, 80, 80)
-PANEL_BG = (18, 18, 22)
-PANEL_BORDER = (50, 50, 55)
-PANEL_BORDER_GOLD = (201, 168, 76)
+BG_GREEN = (39, 119, 62)
+BG_DARK = (20, 20, 20)
+CARD_WHITE = (255, 255, 255)
+CARD_BACK_BLUE = (30, 60, 120)
+CARD_BACK_PATTERN = (40, 80, 150)
+CARD_SHADOW = (15, 15, 15)
+BLACK = (0, 0, 0)
+RED = (200, 30, 30)
+GOLD = (255, 215, 0)
+TEXT_WHITE = (255, 255, 255)
+TEXT_BLACK = (0, 0, 0)
+TEXT_DIM = (180, 180, 180)
+HIGHLIGHT = (255, 255, 100)
+DIM = (100, 100, 100)
+PANEL_BG = (15, 15, 15)
+PANEL_BORDER = (60, 60, 60)
 POWER_GLOW = (80, 180, 255)
-EMPTY_SLOT = (40, 60, 50)
-KNOWN_TINT = (201, 168, 76, 50)
-DECLARE_RED = (180, 35, 50)
-DECLARE_RED_HOVER = (210, 50, 65)
-CANCEL_GRAY = (70, 70, 75)
-CANCEL_GRAY_HOVER = (100, 100, 105)
-PEEK_BLUE = (60, 130, 200)
-PEEK_BLUE_HOVER = (80, 155, 230)
-SWAP_GREEN = (35, 120, 80)
-SWAP_GREEN_HOVER = (50, 150, 100)
-DISCARD_ORANGE = (190, 110, 30)
-DISCARD_ORANGE_HOVER = (220, 140, 45)
-PAIR_TEAL = (35, 130, 150)
-PAIR_TEAL_HOVER = (50, 160, 180)
+EMPTY_SLOT = (60, 90, 60)
+KNOWN_TINT = (255, 215, 0, 40)
+DECLARE_RED = (220, 40, 40)
+DECLARE_RED_HOVER = (255, 70, 70)
+CANCEL_GRAY = (100, 100, 100)
+CANCEL_GRAY_HOVER = (140, 140, 140)
+PEEK_BLUE = (70, 140, 220)
+PEEK_BLUE_HOVER = (100, 170, 250)
+SWAP_GREEN = (40, 130, 60)
+SWAP_GREEN_HOVER = (60, 170, 80)
+DISCARD_ORANGE = (200, 120, 30)
+DISCARD_ORANGE_HOVER = (230, 150, 50)
+PAIR_TEAL = (40, 140, 160)
+PAIR_TEAL_HOVER = (60, 170, 190)
 
 STATUS_BAR_H = 44
 ACTION_BAR_Y = 830
 ACTION_BAR_H = 70
 
-CARD_WIDTH = 80
-CARD_HEIGHT = 112
-CORNER_RADIUS = 8
+CARD_WIDTH = 100
+CARD_HEIGHT = 140
+CORNER_RADIUS = 10
 
-CARD_SPREAD = 95
+CARD_SPREAD = 116
 
 DECK_CENTER = (640, 400)
 DRAWN_CARD_POS = (860, 400)
@@ -101,10 +90,6 @@ SUITS = ['spade', 'heart', 'diamond', 'club']
 HAND_SIZE = 4
 MAX_PAIR_STACK = 2
 
-DEFAULT_HAND_SIZE = 4
-DEFAULT_PEEK_COUNT = 2
-HAND_SIZE_OPTIONS = [2, 3, 4, 5, 6]
-
 POWER_CARDS = {
     '7': 'peek_self',
     '8': 'peek_self',
@@ -148,21 +133,10 @@ DEFAULT_SHOW_GAME_LOG = True
 DEFAULT_CONFIRM_DECLARE = True
 DEFAULT_AI_DIFFICULTY = 'medium'
 DEFAULT_LAYOUT_MODE = 'line'
-DEFAULT_FELT = 'forest'
 DEFAULT_SELF_PAIR_ENABLED = True
 DEFAULT_SHUFFLE_ENABLED = True
 DEFAULT_WRONG_DROP_PENALTY = True
 DEFAULT_REACTION_WINDOW_SECONDS = 3.0
-
-REACTION_WINDOW_OPTIONS = [2.0, 3.0, 5.0]
-REACTION_WINDOW_LABELS = ['2s', '3s', '5s']
-
-SHUFFLE_COLOR = (120, 100, 180)
-SHUFFLE_HOVER = (150, 130, 210)
-SELF_PAIR_COLOR = (40, 160, 140)
-SELF_PAIR_HOVER = (60, 190, 170)
-DROP_MATCH_COLOR = (220, 140, 40)
-DROP_MATCH_HOVER = (240, 165, 60)
 
 AI_DELAY_OPTIONS = [0.3, 0.8, 1.5]
 AI_DELAY_LABELS = ['Fast', 'Normal', 'Slow']
@@ -176,27 +150,16 @@ AI_DIFFICULTY_OPTIONS = ['easy', 'medium', 'hard']
 AI_DIFFICULTY_LABELS = ['Easy', 'Medium', 'Hard']
 PEEK_PHASE_OPTIONS = [3.0, 5.0, 10.0, 999.0]
 PEEK_PHASE_LABELS = ['3s', '5s', '10s', '\u221e']
-
-ANIM_SHUFFLE_DURATION = 0.4
-ANIM_REACTIVE_DROP_DURATION = 0.3
-ANIM_PENALTY_DRAW_DURATION = 0.3
-
-FELT_COLORS = {
-    'forest':   (27, 67, 50),
-    'burgundy': (92, 26, 27),
-    'navy':     (26, 39, 68),
-    'charcoal': (45, 45, 45),
-    'emerald':  (18, 80, 60),
-}
-FELT_LABELS = ['Forest', 'Burgundy', 'Navy', 'Charcoal', 'Emerald']
-
-FELT_COLORS_LIGHT = {
-    'forest':   (35, 85, 62),
-    'burgundy': (120, 35, 36),
-    'navy':     (35, 52, 88),
-    'charcoal': (60, 60, 60),
-    'emerald':  (25, 100, 75),
-}
+SWAP_REVEAL_SECONDS = 2.0
+DEFAULT_HAND_SIZE = 4
+DEFAULT_PEEK_COUNT = 2
+DEFAULT_REACTION_WINDOW = 3.0
+HAND_SIZE_OPTIONS = [2, 3, 4, 5, 6]
+HAND_SIZE_LABELS = ['2', '3', '4', '5', '6']
+REACTION_WINDOW_OPTIONS = [2.0, 3.0, 5.0]
+REACTION_WINDOW_LABELS = ['2s', '3s', '5s']
+PEEK_COUNT_OPTIONS = [0, 1, 2, 3, 4, 5]
+PEEK_COUNT_LABELS = ['0', '1', '2', '3', '4', '5']
 
 ANIM_DRAW_DURATION = 0.3
 ANIM_SWAP_DURATION = 0.4
@@ -207,6 +170,16 @@ ANIM_PAIR_FLY_DURATION = 0.4
 ANIM_DISCARD_DURATION = 0.3
 ANIM_NOTIFICATION_DURATION = 2.0
 ANIM_FLASH_DURATION = 0.3
+ANIM_SHUFFLE_DURATION = 0.4
+ANIM_REACTIVE_DROP_DURATION = 0.3
+ANIM_PENALTY_DRAW_DURATION = 0.3
+
+SHUFFLE_COLOR = (120, 100, 180)
+SHUFFLE_HOVER = (150, 130, 210)
+SELF_PAIR_COLOR = (40, 160, 140)
+SELF_PAIR_HOVER = (60, 190, 170)
+DROP_MATCH_COLOR = (220, 140, 40)
+DROP_MATCH_HOVER = (240, 165, 60)
 
 CARD_FONT_SIZE = 18
 CARD_BIG_FONT_SIZE = 28
@@ -215,25 +188,3 @@ SUBTITLE_FONT_SIZE = 22
 UI_FONT_SIZE = 20
 LOG_FONT_SIZE = 15
 SMALL_FONT_SIZE = 14
-
-FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'fonts')
-FONT_PATHS = {
-    'title': os.path.join(FONTS_DIR, 'Cinzel-Bold.ttf'),
-    'subtitle': os.path.join(FONTS_DIR, 'Cinzel-Regular.ttf'),
-    'ui': os.path.join(FONTS_DIR, 'Inter-Regular.ttf'),
-    'ui_bold': os.path.join(FONTS_DIR, 'Inter-SemiBold.ttf'),
-    'card': os.path.join(FONTS_DIR, 'Roboto-Regular.ttf'),
-    'card_bold': os.path.join(FONTS_DIR, 'Roboto-Bold.ttf'),
-    'small': os.path.join(FONTS_DIR, 'Inter-Regular.ttf'),
-    'log': os.path.join(FONTS_DIR, 'Inter-Regular.ttf'),
-}
-FONT_FALLBACKS = {
-    'title': 'georgia',
-    'subtitle': 'georgia',
-    'ui': 'segoeui',
-    'ui_bold': 'segoeui',
-    'card': 'arial',
-    'card_bold': 'arial',
-    'small': 'segoeui',
-    'log': 'segoeui',
-}
