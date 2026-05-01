@@ -57,10 +57,11 @@ CHAPTERS = [
         sfx="draw",
     ),
     TutorialStep(
-        title="Suits & Values",
-        body="Aces = 1. Number cards = face value. J/Q = 11/12. "
-             "Red Kings = 13 (high). Black Kings = 0 — keep these. "
-             "Lowest sum wins.",
+        title="Counting Your Hand",
+        body="Score is the sum of your cards. Ace = 1. Numbers (2-10) = "
+             "face value. Jack = 11. Queen = 12. Red King = 13 (the worst). "
+             "Black King = 0 — these are gold, keep them at all costs. "
+             "Example: 3 + 7 + K♣(0) + Q(12) = 22. Lowest sum wins.",
         target="center",
         advance_on="continue",
     ),
@@ -81,10 +82,12 @@ CHAPTERS = [
         advance_on="continue",
     ),
     TutorialStep(
-        title="Reactive Pairing",
-        body="When ANY player plays a card, others have a brief window "
-             "to drop a matching rank. Wrong card = penalty draw. "
-             "Watch the gold banner.",
+        title="The Reaction Window",
+        body="When someone discards, a 3-second gold banner opens. If you "
+             "hold a known card of the same rank, click 'Drop' to dump it — "
+             "shrinks your hand AND your score. Click the wrong card and "
+             "you eat a penalty card. The banner pulses red as time runs "
+             "out. Pass if unsure.",
         target="center",
         advance_on="continue",
     ),

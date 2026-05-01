@@ -105,6 +105,8 @@ class GameManager:
             self.state = GameState.RESOLVE_DECLARE
         else:
             self.state = GameState.TURN_START
+            cp = self.current_player()
+            self.game_log.append("Your turn" if cp.is_human else f"{cp.name}'s turn")
 
     def draw_card(self) -> Card:
         if self.deck.is_empty:
@@ -250,6 +252,8 @@ class GameManager:
         return {"success": True, "result": result}
 
     def end_reaction_window(self):
+        if not self.reaction_responded and self.reaction_rank is not None:
+            self.game_log.append("Reaction missed")
         self.reaction_rank = None
         self.reaction_source_player = None
         self.reaction_timer = 0

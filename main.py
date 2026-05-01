@@ -335,6 +335,8 @@ def main():
     achievement_queue = []
 
     renderer = Renderer(screen)
+    # Renderer reaches into edge_flash for the reaction-window urgency cue (A4)
+    renderer.edge_flash = edge_flash
     menu_screen = MenuScreen(screen)
     setup_screen = SetupScreen(screen)
     peek_screen = PeekScreen(screen, game_settings.hand_size, game_settings.peek_count, game_settings.peek_phase_seconds)
@@ -618,6 +620,9 @@ def main():
                     toasts.clear()
                     particles.clear()
                     audio.play("shuffle")
+                    hint_engine.reset_for_new_match()
+                    # B3 — reset fanfare guard so the next game-over plays.
+                    game_over_screen._fanfare_played = False
                     prof.last_match_config = {
                         "configs": [{"name": c["name"], "is_human": c["is_human"],
                                      "difficulty": c.get("difficulty", "medium")} for c in configs],
@@ -636,6 +641,11 @@ def main():
                     ai_phase = 'idle'
                     ai_timer = 0
                     current_screen = "game"
+                    # A2 — round-start fanfare.
+                    audio.play("shuffle")
+                    particles.burst_achievement(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+                    toasts.push(f"Round {getattr(game_manager, 'round_number', 1)}",
+                                kind="info", icon="*", life=1.8)
 
             elif current_screen == "game":
                 if settings_open:
@@ -934,6 +944,8 @@ def main():
                                                         player.seat_index, slot_idx,
                                                         their_card_before,
                                                     )
+                                                    # B6 — flip SFX on the reveal arc.
+                                                    audio.play("flip")
                                                 else:
                                                     renderer.push_unseen_swap_animation(
                                                         game_manager, selected_slot,
@@ -1196,12 +1208,31 @@ def main():
                     ai_phase = 'acting'
                     ai_timer = 0.0
 
-                if ai_phase == 'acting' and ai_timer >= 0.5:
+                if ai_phase == 'acting' and ai_timer >= max(1.0, game_settings.ai_delay):
                     ai = AIDecider(cp, {'players': game_manager.players})
                     drawn = game_manager.drawn_card
                     if drawn:
                         decision = ai.choose_action(drawn)
                         action_key = decision['action']
+
+                        # C2 — coach-mode AI narration. Hint engine logs a
+                        # human-readable reason and (when captions are on)
+                        # pushes it to the caption stream. Gated by
+                        # hint_engine.coach_on() inside coach_log().
+                        if hint_engine.coach_on():
+                            verb_map = {
+                                'swap': 'swap into hand — replaces a worse card',
+                                'discard': 'discard — keeps the score down',
+                                'pair_own': 'pair with own known card — clears a slot',
+                                'pair_opponent': 'pair onto an opponent — forces them to take a card',
+                                'play_power': f"play {drawn.power} power" if drawn.power else 'play power',
+                                'declare': 'declare — bet the round on a low score',
+                            }
+                            reason = verb_map.get(action_key, action_key)
+                            hint_engine.coach_log(
+                                f"{cp.name} chose to {reason}.",
+                                captions=captions if game_settings.captions else None,
+                            )
 
                         if action_key == 'play_power':
                             target_info = _ai_power_target(ai, cp, game_manager.players, drawn)
@@ -1253,6 +1284,8 @@ def main():
                                         game_manager, my_slot, target_player_idx, their_slot,
                                         their_card_before,
                                     )
+                                    # B6 — flip SFX for the reveal arc.
+                                    audio.play("flip")
                                 else:
                                     renderer.push_unseen_swap_animation(
                                         game_manager, my_slot, target_player_idx, their_slot,
@@ -1364,7 +1397,7 @@ def main():
                         ai_phase = 'ending'
                         ai_timer = 0.0
 
-                if ai_phase == 'ending' and ai_timer >= 0.3:
+                if ai_phase == 'ending' and ai_timer >= max(1.2, game_settings.ai_delay):
                     game_manager.end_turn()
                     ai_phase = 'idle'
                     ai_timer = 0.0
@@ -1432,6 +1465,11 @@ def main():
                 ai_phase = 'idle'
                 ai_timer = 0
                 current_screen = "game"
+                # A2 — round-start fanfare (timer-driven peek-done path).
+                audio.play("shuffle")
+                particles.burst_achievement(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+                toasts.push(f"Round {getattr(game_manager, 'round_number', 1)}",
+                            kind="info", icon="*", life=1.8)
 
         elif current_screen == "game":
             if game_manager is None:
@@ -1531,6 +1569,25 @@ def main():
                     screen.blit(bg, (bx, by))
                     screen.blit(label_surf, (bx + pad, by + S(4)))
 
+                    # B1 — first-encounter explainer below the drawn card.
+                    tip_text, tip_color = hint_engine.power_explainer_active()
+                    if tip_text:
+                        tip_font = small_font
+                        tip_surf = tip_font.render(tip_text, True, TEXT_WHITE)
+                        tpad = S(10)
+                        tx = DRAWN_CARD_POS[0] - tip_surf.get_width() // 2 - tpad
+                        ty = DRAWN_CARD_POS[1] + CARD_HEIGHT // 2 + S(20)
+                        tip_bg = pygame.Surface(
+                            (tip_surf.get_width() + tpad * 2,
+                             tip_surf.get_height() + S(10)),
+                            pygame.SRCALPHA)
+                        pygame.draw.rect(tip_bg, (0, 0, 0, 200), tip_bg.get_rect(),
+                                         border_radius=S(6))
+                        pygame.draw.rect(tip_bg, tip_color, tip_bg.get_rect(),
+                                         max(1, S(1)), border_radius=S(6))
+                        screen.blit(tip_bg, (tx, ty))
+                        screen.blit(tip_surf, (tx + tpad, ty + S(5)))
+
                 if notification_text:
                     renderer.draw_reaction_result(notification_text, renderer.screen)
 
@@ -1542,7 +1599,8 @@ def main():
                     'declarer_won': False,
                     'auto_win': False,
                 }
-            game_over_screen.draw(game_manager, game_over_result or {})
+            game_over_screen.draw(game_manager, game_over_result or {},
+                                   particles=particles, edge_flash=edge_flash)
 
         if current_screen == "game":
             if settings_open and game_manager:
@@ -1649,9 +1707,9 @@ def _react_to_log_entry(entry, particles, toasts, gm, renderer,
                         cam=None, edge_flash=None, timewarp=None,
                         hints=None, last_human_action=None,
                         captions=None):
-    def cap(key):
+    def cap(key, text_override=None):
         if captions is not None:
-            text = audio.caption(key)
+            text = text_override if text_override is not None else audio.caption(key)
             if text:
                 captions.push(text)
     """Translate a new game-log line into juice (SFX, particles, toasts, shake, flash)."""
@@ -1665,8 +1723,51 @@ def _react_to_log_entry(entry, particles, toasts, gm, renderer,
         DRAWN_CARD_POS = (860, 400)
         DISCARD_POS = (750, 400)
 
-    if "drew" in low and "as penalty" not in low:
+    cx_mid, cy_mid = SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2
+
+    # A1 — turn-start cue (only for the human; the AI branch below pushes the
+    # "thinking" caption used by A9).
+    if low == "your turn" or low.startswith("your turn"):
+        audio.play("ui_open"); cap("ui_open", "Your turn")
+        if cam: cam.kick(amp=0.8, duration=0.08)
+        return
+    if low.endswith("'s turn") or low.endswith("’s turn"):
+        # AI taking control. Push a short "thinking" caption so coach/captions
+        # users hear the cadence; no SFX (would step on the human's cue).
+        cap(None, f"{text} — thinking…")
+        return
+
+    if "drew" in low and "as penalty" not in low and "penalty" not in low:
         audio.play("draw"); cap("draw")
+    elif "wrong drop" in low or "wrong call" in low or "wrong card" in low or "penalty" in low:
+        # A5 — penalty toast accompanies the existing SFX/particles.
+        audio.play("wrong_react"); cap("wrong_react")
+        particles.burst_penalty(cx_mid, cy_mid)
+        if cam: cam.kick(amp=4.5, duration=0.30, freq=28)
+        if edge_flash:
+            edge_flash.fire(color=(212, 72, 72), duration=0.5, thickness=24)
+        toasts.push("Wrong card — penalty drawn", kind="error", icon="!", life=2.4)
+    elif "shuffled" in low:
+        # A10 — shuffle SFX on player reshuffle.
+        audio.play("shuffle"); cap("shuffle")
+        particles.burst_power(*DECK_CENTER, color=(232, 195, 110))
+        if cam: cam.kick(amp=1.0, duration=0.08)
+    elif "self-paired" in low:
+        # A3 — self-pair celebration.
+        audio.play("pair"); cap("pair")
+        particles.burst_pair(*DRAWN_CARD_POS)
+        toasts.push("Self-pair!", kind="success", icon="*", life=1.8)
+        if cam: cam.kick(amp=2.0, duration=0.14)
+    elif "dropped" in low and "match" in low:
+        audio.play("pair"); cap("pair")
+        particles.burst_pair(*DISCARD_POS)
+        toasts.push("Reactive drop!", kind="success", icon="*", life=1.8)
+        if cam: cam.kick(amp=2.0, duration=0.16)
+    elif "called opponent" in low or "matching card" in low:
+        audio.play("pair"); cap("pair")
+        particles.burst_pair(*DRAWN_CARD_POS)
+        toasts.push("Called opponent!", kind="success", icon="*", life=1.8)
+        if cam: cam.kick(amp=2.0, duration=0.16)
     elif "discarded" in low or "discards" in low:
         audio.play("place"); cap("place")
         x, y = DISCARD_POS
@@ -1694,19 +1795,16 @@ def _react_to_log_entry(entry, particles, toasts, gm, renderer,
     elif "declared" in low or "declares" in low:
         audio.play("declare"); cap("declare")
         toasts.push("Declared!", kind="warn", icon="!", life=2.6)
-        particles.burst_declare(960, 540)
+        particles.burst_declare(cx_mid, cy_mid)
         if cam: cam.kick(amp=4.0, duration=0.45, freq=18)
         if edge_flash: edge_flash.fire(duration=0.9, thickness=36)
         if timewarp: timewarp.slowmo(factor=0.45, duration=1.4)
-    elif "wrong card" in low or "penalty" in low:
-        audio.play("wrong_react"); cap("wrong_react")
-        particles.burst_penalty(960, 540)
-        if cam: cam.kick(amp=4.5, duration=0.30, freq=28)
-        if edge_flash:
-            edge_flash.fire(color=(212, 72, 72), duration=0.5, thickness=24)
     elif "reaction" in low and ("opens" in low or "begins" in low or "window" in low):
         audio.play("react_open"); cap("react_open")
         if edge_flash: edge_flash.fire(duration=0.6, thickness=28)
+    elif "reaction missed" in low:
+        # A6 — reaction-window-close cue.
+        audio.play("ui_close"); cap("ui_close", "Reaction missed")
 
 
 if __name__ == "__main__":

@@ -22,12 +22,27 @@ from config import (
 )
 
 
+_POWER_EXPLAINERS = {
+    'peek_self': "Look at one of your own cards.",
+    'peek_opponent': "Look at one of your opponent's cards.",
+    'unseen_swap': "Blind-swap a card with an opponent — neither side sees.",
+    'seen_swap': "Swap a card with an opponent — you see what you got.",
+    'skip': "Skip the next player's turn.",
+}
+
+
 class HintEngine:
     def __init__(self, settings):
         self.settings = settings
         self._known_seen_at = {}
         self._coach_messages = []
         self._coach_until = 0.0
+        # B1 — track which power ranks the player has already seen this game,
+        # so the inline explainer only fires the first time each surfaces.
+        self._first_seen_powers: set = set()
+        self._tooltip_until: float = 0.0
+        self._tooltip_text: str = ""
+        self._tooltip_color: tuple = (232, 195, 110)
 
     def tier(self):
         return getattr(self.settings, "hint_tier", 1)
@@ -74,7 +89,32 @@ class HintEngine:
             return None, None
         label = POWER_LABELS.get(gm.drawn_card.power, gm.drawn_card.power)
         color = POWER_COLORS.get(gm.drawn_card.power, (200, 200, 200))
+        # B1 — first time this game we surface a given power, queue an
+        # explainer toast (lives 4s under the drawn card).
+        power = gm.drawn_card.power
+        if power and power not in self._first_seen_powers:
+            self._first_seen_powers.add(power)
+            text = _POWER_EXPLAINERS.get(power)
+            if text:
+                self._tooltip_text = text
+                self._tooltip_color = color
+                self._tooltip_until = time.monotonic() + 4.0
         return label, color
+
+    def power_explainer_active(self):
+        """Return (text, color) if a first-encounter tooltip is still showing,
+        else (None, None). Callers render the panel."""
+        if time.monotonic() > self._tooltip_until:
+            return None, None
+        return self._tooltip_text, self._tooltip_color
+
+    def reset_for_new_match(self):
+        """Clear per-match state. Call from main.py at game-start."""
+        self._first_seen_powers.clear()
+        self._tooltip_until = 0.0
+        self._tooltip_text = ""
+        self._known_seen_at.clear()
+        self._coach_messages.clear()
 
     def known_marker_tint(self, slot_index, card):
         """Tier 2 memory aid: gold marker tinted by rank for 30s after seeing."""
@@ -142,13 +182,20 @@ class HintEngine:
         screen.blit(count_label, (chip.right - count_label.get_width() - 8,
                                    chip.centery - count_label.get_height() // 2))
 
-    def coach_log(self, message, duration=5.0):
+    def coach_log(self, message, duration=5.0, captions=None):
         if not self.coach_on():
             return
         self._coach_messages.append(message)
         self._coach_until = time.monotonic() + duration
         if len(self._coach_messages) > 4:
             self._coach_messages = self._coach_messages[-4:]
+        # C2 — also surface coach lines via captions when supplied, so
+        # tier-3 users get spoken/text narration during AI moves.
+        if captions is not None:
+            try:
+                captions.push(message)
+            except Exception:
+                pass
 
     def draw_coach(self, screen):
         if not self.coach_on():

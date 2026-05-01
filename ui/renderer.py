@@ -101,6 +101,7 @@ class Renderer:
         self._draw_status_bar(game_manager)
         self.draw_discard(game_manager.discard_pile)
         self.draw_deck(game_manager.deck.remaining if game_manager.deck else 0)
+        self._draw_active_surface_ring(game_manager)
         if game_manager.drawn_card:
             self.draw_drawn_card(game_manager.drawn_card)
         num_players = len(game_manager.players)
@@ -249,7 +250,13 @@ class Renderer:
         text_x = avatar_rect.right + S(16)
         self.screen.blit(round_surf, (text_x, (STATUS_BAR_H - round_surf.get_height()) // 2))
 
-        name_surf = self.ui_font.render(current_player.name, True, th.brass_300)
+        # A9 — when an AI is the current player, append three time-cycled
+        # dots so the player feels the AI "thinking" beat.
+        display_name = current_player.name
+        if not current_player.is_human:
+            phase = (pygame.time.get_ticks() // 350) % 4
+            display_name = current_player.name + ("." * phase)
+        name_surf = self.ui_font.render(display_name, True, th.brass_300)
         name_x = text_x + round_surf.get_width() + S(20)
         self.screen.blit(name_surf, (name_x, (STATUS_BAR_H - name_surf.get_height()) // 2))
 
@@ -434,7 +441,8 @@ class Renderer:
         pygame.draw.rect(surface, hi, dot, border_radius=1)
 
     def draw_card_back(self, x, y, has_known_marker=False, hovered=False,
-                      player=None, slot_index=None, game_manager=None):
+                      player=None, slot_index=None, game_manager=None,
+                      darken=False):
         rect = pygame.Rect(x, y, CARD_WIDTH, CARD_HEIGHT)
         lift_y = -S(4) if hovered else 0
         self._draw_shadow(x, y + S(5) + lift_y)
@@ -442,6 +450,12 @@ class Renderer:
         style = self._active_back_style()
         back = card_render.paint_back(style=style, w=CARD_WIDTH, h=CARD_HEIGHT)
         self.screen.blit(back, (x, y + lift_y))
+        # C3 — non-human hands render with a darker overlay so AI cards read
+        # as "not yours" at a glance.
+        if darken:
+            shade = pygame.Surface((CARD_WIDTH, CARD_HEIGHT), pygame.SRCALPHA)
+            shade.fill((0, 0, 0, 56))
+            self.screen.blit(shade, (x, y + lift_y))
 
         if hovered:
             t = pygame.time.get_ticks() / 1000.0
@@ -512,6 +526,35 @@ class Renderer:
         self._draw_dashed_rect(self.screen, EMPTY_SLOT, rect, CORNER_RADIUS)
         return rect
 
+    def _draw_active_surface_ring(self, game_manager):
+        """C4 — soft pulsing ring around the next legal interaction surface
+        (deck if not yet drawn, discard if a card is in hand). Brighter at
+        hint_tier >= 1; subtle at tier 0."""
+        cp = game_manager.current_player()
+        if not cp.is_human:
+            return
+        gs = self.game_settings
+        tier = getattr(gs, 'hint_tier', 0) if gs is not None else 0
+        if game_manager.state == GameState.TURN_START:
+            cx, cy = DECK_CENTER
+        elif (game_manager.state == GameState.DECIDE
+              and game_manager.drawn_card is not None):
+            cx, cy = DRAWN_CARD_POS
+        else:
+            return
+        rect = pygame.Rect(cx - CARD_WIDTH // 2 - S(8),
+                           cy - CARD_HEIGHT // 2 - S(8),
+                           CARD_WIDTH + S(16), CARD_HEIGHT + S(16))
+        t_phase = pygame.time.get_ticks() / 1000.0
+        pulse = 0.55 + 0.45 * abs(math.sin(t_phase * 3))
+        base_alpha = 200 if tier >= 1 else 100
+        ring_color = (*GOLD, int(base_alpha * pulse))
+        ring_surf = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+        pygame.draw.rect(ring_surf, ring_color, ring_surf.get_rect(),
+                         max(2, S(3)),
+                         border_radius=CORNER_RADIUS + S(6))
+        self.screen.blit(ring_surf, rect.topleft)
+
     def draw_deck(self, remaining):
         cx, cy = DECK_CENTER
         dx = cx - CARD_WIDTH // 2
@@ -538,13 +581,52 @@ class Renderer:
 
     def draw_discard(self, discard_pile):
         if not discard_pile:
+            self._discard_prev_len = 0
             return
         cx, cy = DISCARD_POS
         dx = cx - CARD_WIDTH // 2
         dy = cy - CARD_HEIGHT // 2
         top_card = discard_pile[-1]
         top_card.face_up = True
-        self.draw_card_face(dx, dy, top_card)
+
+        # B5 — track pile growth between frames; on growth, run a 0.4s land
+        # animation (lerp Y + alpha) and emit a particle trail. Underlying
+        # cards in the pile are drawn rotated for "what just got played" feel.
+        prev_len = getattr(self, "_discard_prev_len", 0)
+        if len(discard_pile) > prev_len:
+            self._discard_land_t = pygame.time.get_ticks() / 1000.0
+            self._discard_prev_len = len(discard_pile)
+
+        # Draw a couple of underlying cards at slight rotations to suggest depth.
+        underlay_count = min(2, len(discard_pile) - 1)
+        for k in range(underlay_count, 0, -1):
+            depth_card = discard_pile[-1 - k]
+            angle = -3 - k
+            face = card_render.paint_face(depth_card, CARD_WIDTH, CARD_HEIGHT)
+            face = pygame.transform.rotate(face, angle)
+            fr = face.get_rect(center=(cx + S(2) * k, cy + S(3) * k))
+            self.screen.blit(face, fr.topleft)
+
+        # Top card with land animation if just played.
+        land_t = getattr(self, "_discard_land_t", None)
+        now = pygame.time.get_ticks() / 1000.0
+        if land_t is not None and now - land_t < 0.4:
+            t = (now - land_t) / 0.4
+            ease = 1 - (1 - t) ** 3
+            offset_y = int(-S(28) * (1 - ease))
+            alpha = int(255 * (0.55 + 0.45 * ease))
+            face = card_render.paint_face(top_card, CARD_WIDTH, CARD_HEIGHT)
+            face.set_alpha(alpha)
+            angle = -3 + (1 - ease) * 6
+            face = pygame.transform.rotate(face, angle)
+            fr = face.get_rect(center=(cx, cy + offset_y))
+            self.screen.blit(face, fr.topleft)
+        else:
+            face = card_render.paint_face(top_card, CARD_WIDTH, CARD_HEIGHT)
+            face = pygame.transform.rotate(face, -3)
+            fr = face.get_rect(center=(cx, cy))
+            self.screen.blit(face, fr.topleft)
+
         label_surf = self.small_font.render("Discard", True, TEXT_DIM)
         label_rect = label_surf.get_rect(center=(cx, cy + CARD_HEIGHT // 2 + S(14)))
         self.screen.blit(label_surf, label_rect)
@@ -593,6 +675,15 @@ class Renderer:
         info_rect = info_surf.get_rect(center=(px, info_y))
         self.screen.blit(info_surf, info_rect)
 
+        # B2 — during a reaction window, gate a same-rank highlight on
+        # hint_tier >= 2 so memory-aid users get a "your matching card lives
+        # here" cue without leaking info to opt-out players.
+        gs = self.game_settings
+        hint_tier = getattr(gs, 'hint_tier', 0) if gs is not None else 0
+        in_reaction = (game_manager.state == GameState.REACTION_WINDOW
+                       and not getattr(game_manager, 'reaction_responded', True))
+        reaction_rank = getattr(game_manager, 'reaction_rank', None) if in_reaction else None
+
         for slot_index in range(player.hand_size):
             card = player.hand[slot_index]
             if slot_index < len(card_positions):
@@ -612,7 +703,36 @@ class Renderer:
                                     player=player, slot_index=slot_index, game_manager=game_manager)
             else:
                 self.draw_card_back(cx, cy, has_known_marker=False,
-                                    player=player, slot_index=slot_index, game_manager=game_manager)
+                                    player=player, slot_index=slot_index, game_manager=game_manager,
+                                    darken=True)
+
+            # B2 same-rank reaction pulse (drawn after the card so it floats on top).
+            if (in_reaction and is_human and hint_tier >= 2 and reaction_rank
+                    and slot_index in player.known_cards
+                    and player.known_cards[slot_index].rank == reaction_rank):
+                t_phase = pygame.time.get_ticks() / 1000.0
+                pulse = 0.55 + 0.45 * abs(math.sin(t_phase * 5))
+                ring_w = CARD_WIDTH + S(10)
+                ring_h = CARD_HEIGHT + S(10)
+                ring_surf = pygame.Surface((ring_w, ring_h), pygame.SRCALPHA)
+                pygame.draw.rect(ring_surf, (*GOLD, int(220 * pulse)),
+                                 ring_surf.get_rect(),
+                                 max(2, S(3)),
+                                 border_radius=CORNER_RADIUS + S(4))
+                self.screen.blit(ring_surf, (cx - S(5), cy - S(5)))
+
+        # C3 — thin brass under-glow line beneath the human player's hand so
+        # the seat reads as "yours" at a glance (paired with the darken
+        # overlay on AI hands above).
+        if is_human and card_positions:
+            bottom_y = max(p[1] for p in card_positions) + CARD_HEIGHT + S(8)
+            left_x = min(p[0] for p in card_positions)
+            right_x = max(p[0] for p in card_positions) + CARD_WIDTH
+            th = theme_mod.active()
+            for k, alpha in ((0, 90), (S(2), 50), (S(4), 25)):
+                glow = pygame.Surface((right_x - left_x, S(2)), pygame.SRCALPHA)
+                glow.fill((*th.brass_300, alpha))
+                self.screen.blit(glow, (left_x, bottom_y + k))
 
         if self.dragging_card is not None and is_human and self.drag_pos is not None:
             slot_index = self.dragging_card
@@ -789,6 +909,32 @@ class Renderer:
         label_rect = label_surf.get_rect(center=(cx, dy - S(12)))
         self.screen.blit(label_surf, label_rect)
         rect = self.draw_card_face(dx, dy, card, show_power_label=True, show_pips=False)
+
+        # A7 — power-color border tint on the drawn card. Draws a rounded
+        # outline at POWER_COLORS[power] plus a soft outer glow that pulses
+        # for the first 0.7s after the card surfaces, then settles.
+        if card and getattr(card, 'power', None):
+            power_color = POWER_COLORS.get(card.power, GOLD)
+            # Track per-card surface time for the entry pulse.
+            tracker = getattr(self, "_drawn_power_tracker", None)
+            now = pygame.time.get_ticks() / 1000.0
+            if tracker is None or tracker[0] is not card:
+                self._drawn_power_tracker = (card, now)
+                age = 0.0
+            else:
+                age = now - tracker[1]
+            entry_pulse = 1.0 if age >= 0.7 else (0.5 + 0.5 * abs(math.sin(age * 8)))
+            glow_alpha = int(80 * entry_pulse)
+            glow_surf = pygame.Surface((CARD_WIDTH + S(16), CARD_HEIGHT + S(16)),
+                                        pygame.SRCALPHA)
+            pygame.draw.rect(glow_surf, (*power_color, glow_alpha),
+                             glow_surf.get_rect(),
+                             border_radius=CORNER_RADIUS + S(6))
+            self.screen.blit(glow_surf, (dx - S(8), dy - S(8)))
+            outline_rect = pygame.Rect(dx - S(2), dy - S(2),
+                                        CARD_WIDTH + S(4), CARD_HEIGHT + S(4))
+            pygame.draw.rect(self.screen, power_color, outline_rect,
+                             max(1, S(2)), border_radius=CORNER_RADIUS + S(2))
         return rect
 
     def draw_peek_reveal(self):
@@ -928,7 +1074,10 @@ class Renderer:
         self.screen.blit(text_surf, text_rect)
 
     def _draw_reaction_banner(self, game_manager, screen):
-        """Draw the reaction window banner when active."""
+        """Draw the reaction window banner when active. A4: the banner
+        accent + bar + pulse rate escalate from gold → red as the timer
+        approaches zero, and an EdgeFlash fires once when urgency crosses
+        0.66 (gated via a per-window instance flag)."""
         if game_manager.state != GameState.REACTION_WINDOW:
             return
         # v1-1 mechanics use reaction_responded (False = still pending)
@@ -937,26 +1086,38 @@ class Renderer:
 
         rank = game_manager.reaction_rank or "?"
         timer = max(0, game_manager.reaction_timer)
+        window = max(0.001, game_manager.settings.reaction_window_seconds)
+        remaining = timer / window
+        urgency = 1.0 - remaining
+
+        # Lerp gold → signal_stop (red) as urgency rises.
+        signal_stop = (212, 72, 72)
+        accent = (
+            int(GOLD[0] + (signal_stop[0] - GOLD[0]) * urgency),
+            int(GOLD[1] + (signal_stop[1] - GOLD[1]) * urgency),
+            int(GOLD[2] + (signal_stop[2] - GOLD[2]) * urgency),
+        )
 
         banner_h = S(70)
         banner_y = SCREEN_HEIGHT // 2 - banner_h // 2
         banner_x = SCREEN_WIDTH // 2
         banner_rect = pygame.Rect(banner_x - S(300), banner_y, S(600), banner_h)
 
-        pulse = abs(math.sin(pygame.time.get_ticks() * 0.005)) * 0.3 + 0.7
-        glow_color = (*GOLD, int(200 * pulse))
+        pulse_speed = 0.005 * (1.0 + 2.0 * urgency)
+        pulse = abs(math.sin(pygame.time.get_ticks() * pulse_speed)) * 0.3 + 0.7
+        glow_color = (*accent, int(200 * pulse))
 
         glow_surf = pygame.Surface((S(620), banner_h + S(20)), pygame.SRCALPHA)
         pygame.draw.rect(glow_surf, glow_color, glow_surf.get_rect(), border_radius=S(12))
         screen.blit(glow_surf, (banner_x - S(310), banner_y - S(10)))
 
         pygame.draw.rect(screen, (30, 80, 40), banner_rect, border_radius=S(10))
-        pygame.draw.rect(screen, GOLD, banner_rect, max(1, S(2)), border_radius=S(10))
+        pygame.draw.rect(screen, accent, banner_rect, max(1, S(2)), border_radius=S(10))
 
         title_font = typo.display_bold(S(28))
         body_font = typo.body(S(20))
 
-        title_surf = title_font.render(f"REACT! {rank} was played!", True, GOLD)
+        title_surf = title_font.render(f"REACT! {rank} was played!", True, accent)
         timer_surf = body_font.render(f"{timer:.1f}s remaining", True, TEXT_WHITE)
 
         screen.blit(title_surf, (banner_rect.centerx - title_surf.get_width() // 2, banner_rect.y + S(12)))
@@ -965,9 +1126,21 @@ class Renderer:
         bar_width = S(560)
         bar_x = banner_rect.x + S(20)
         bar_y = banner_rect.y + banner_h - S(15)
-        remaining = timer / max(0.001, game_manager.settings.reaction_window_seconds)
         pygame.draw.rect(screen, (60, 60, 60), (bar_x, bar_y, bar_width, S(6)), border_radius=S(3))
-        pygame.draw.rect(screen, GOLD, (bar_x, bar_y, int(bar_width * remaining), S(6)), border_radius=S(3))
+        pygame.draw.rect(screen, accent, (bar_x, bar_y, int(bar_width * remaining), S(6)),
+                         border_radius=S(3))
+
+        # One-shot urgency edge flash. The flag is reset whenever a fresh
+        # reaction window opens (we detect open by reaction_rank changing).
+        last_rank = getattr(self, "_last_urgency_rank", None)
+        if last_rank != rank:
+            self._urgency_flashed = False
+            self._last_urgency_rank = rank
+        if urgency >= 0.66 and not getattr(self, "_urgency_flashed", False):
+            self._urgency_flashed = True
+            ef = getattr(self, "edge_flash", None)
+            if ef is not None:
+                ef.fire(color=(224, 165, 38), duration=0.25, thickness=12)
 
     def draw_reaction_result(self, notification_text: str, screen) -> None:
         """Flash a notification for reaction results (wrong card penalty, etc)."""
@@ -1384,6 +1557,9 @@ class Renderer:
 
     def _draw_hud_buttons(self, mouse_pos):
         th = theme_mod.active()
+        # A8 — small keybind chip glyph for each HUD button so new players
+        # discover keyboard shortcuts at a glance.
+        keybinds = {"x": "Q", "pause": "Esc", "gear": "S"}
         for rect, glyph_kind, tooltip in (
             (self.get_quit_rect(),  "x",     "Quit to menu"),
             (self.get_pause_rect(), "pause", "Pause"),
@@ -1417,3 +1593,19 @@ class Renderer:
             elif glyph_kind == "x":
                 pygame.draw.line(self.screen, color, (cx - S(7), cy - S(7)), (cx + S(7), cy + S(7)), max(1, S(2)))
                 pygame.draw.line(self.screen, color, (cx + S(7), cy - S(7)), (cx - S(7), cy + S(7)), max(1, S(2)))
+
+            # A8 — keybind chip above each HUD button.
+            kb = keybinds.get(glyph_kind)
+            if kb:
+                kb_surf = self.small_font.render(kb, True, th.brass_900)
+                pad_x = S(6)
+                pad_y = S(2)
+                chip_w = kb_surf.get_width() + pad_x * 2
+                chip_h = kb_surf.get_height() + pad_y * 2
+                chip_x = rect.centerx - chip_w // 2
+                chip_y = rect.top - chip_h - S(4)
+                chip_bg = pygame.Surface((chip_w, chip_h), pygame.SRCALPHA)
+                pygame.draw.rect(chip_bg, th.brass_300, chip_bg.get_rect(),
+                                 border_radius=max(2, S(3)))
+                self.screen.blit(chip_bg, (chip_x, chip_y))
+                self.screen.blit(kb_surf, (chip_x + pad_x, chip_y + pad_y))

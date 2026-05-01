@@ -976,6 +976,25 @@ class GameOverScreen:
         self.screen.blit(score_surf, score_surf.get_rect(
             center=(x_center, panel_rect.top + S(90))))
 
+        # B4 — arithmetic readout under the SCORE value, e.g. "3 + 7 + K(13) = 23".
+        parts = []
+        for c in player.hand:
+            if c is None:
+                continue
+            v = getattr(c, 'value', 0)
+            rank = getattr(c, 'rank', '?')
+            if rank in ('J', 'Q', 'K'):
+                parts.append(f"{rank}({v})")
+            else:
+                parts.append(str(v))
+        if parts:
+            arith = " + ".join(parts) + f" = {score_val}"
+        else:
+            arith = f"= {score_val}"
+        arith_surf = self.small_font.render(arith, True, th.text_dim)
+        self.screen.blit(arith_surf, arith_surf.get_rect(
+            center=(x_center, panel_rect.top + S(118))))
+
         gap = S(12)
         total_w = hand_size * CARD_WIDTH + (hand_size - 1) * gap
         cards_x = x_center - total_w // 2
@@ -1001,7 +1020,7 @@ class GameOverScreen:
                 dash = self.label_font.render("—", True, th.text_dim)
                 self.screen.blit(dash, dash.get_rect(center=empty_rect.center))
 
-    def draw(self, game_manager, result=None):
+    def draw(self, game_manager, result=None, particles=None, edge_flash=None):
         import theme as theme_mod
         th = theme_mod.active()
 
@@ -1025,6 +1044,23 @@ class GameOverScreen:
             else:
                 banner_text = "It's a draw"
                 banner_color = th.text_white
+
+        # B3 — fire one-shot fanfare on the first paint of this game-over.
+        # Subsequent paints (the player lingering on the screen) skip both the
+        # SFX and the burst.
+        if not getattr(self, "_fanfare_played", False) and result is not None:
+            try:
+                import audio as _audio
+                winner = result.get("winner") if result else None
+                human_won = winner is not None and getattr(winner, "is_human", False)
+                _audio.play("win" if human_won else "loss")
+            except Exception:
+                pass
+            if particles is not None:
+                particles.burst_achievement(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+            if edge_flash is not None and result.get("declarer_won") is False:
+                edge_flash.fire(color=th.declare_red, duration=0.8, thickness=40)
+            self._fanfare_played = True
 
         self._draw_title(banner_text, banner_color)
 
