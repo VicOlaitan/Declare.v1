@@ -96,8 +96,10 @@ class Renderer:
 
     def draw(self, game_manager, mouse_pos=(0, 0), action_buttons=None,
              cancel_button=None, status_message="", awaiting_target=None):
-        self.screen.fill(BG_GREEN)
+        # The cached felt covers the full screen; skipping the fill saves
+        # ~8M pixel writes per frame at 4K.
         self._draw_table_felt()
+        self._draw_active_player_halo(game_manager)
         self._draw_status_bar(game_manager)
         self.draw_discard(game_manager.discard_pile)
         self.draw_deck(game_manager.deck.remaining if game_manager.deck else 0)
@@ -111,6 +113,7 @@ class Renderer:
             is_current = player.seat_index == current_player_index
             is_human = player.is_human
             self.draw_player_area(player, pos, is_current, is_human, game_manager, mouse_pos)
+        self._draw_turn_banner(game_manager)
         self.draw_peek_reveal()
         if game_settings := self.game_settings:
             if game_settings.show_game_log:
@@ -526,6 +529,123 @@ class Renderer:
         self._draw_dashed_rect(self.screen, EMPTY_SLOT, rect, CORNER_RADIUS)
         return rect
 
+    def _draw_turn_banner(self, game_manager):
+        """Big top-of-table banner: 'YOUR TURN' or '<NAME>'s TURN'.
+        Skipped during the reaction-window. The plate + label are cached
+        per (text, is_human) so we only re-render on a turn change or a
+        dots-phase tick."""
+        if game_manager.state == GameState.REACTION_WINDOW:
+            return
+        if game_manager.state == GameState.GAME_OVER:
+            return
+        cp = game_manager.current_player()
+        is_human = cp.is_human
+        th = theme_mod.active()
+
+        if is_human:
+            text = "YOUR TURN"
+        else:
+            phase = (pygame.time.get_ticks() // 350) % 4
+            text = f"{cp.name.upper()}'S TURN" + ("." * phase)
+
+        cache_key = (text, is_human, getattr(th, 'name', 'default'))
+        if getattr(self, "_turn_banner_key", None) != cache_key:
+            accent = GOLD if is_human else th.brass_500
+            ink = th.brass_900 if is_human else th.text_white
+            if not hasattr(self, "_banner_font"):
+                self._banner_font = typo.display_bold(S(28))
+            label = self._banner_font.render(text, True, ink)
+            pad_x = S(28)
+            pad_y = S(8)
+            chip_w = label.get_width() + pad_x * 2
+            chip_h = label.get_height() + pad_y * 2
+            plate = pygame.Surface((chip_w, chip_h), pygame.SRCALPHA)
+            if is_human:
+                for j in range(chip_h):
+                    t = j / max(1, chip_h - 1)
+                    shade = 0.85 + 0.15 * (1 - abs(t - 0.4) * 2)
+                    cc = (int(accent[0] * shade), int(accent[1] * shade),
+                          int(accent[2] * shade), 255)
+                    pygame.draw.line(plate, cc, (0, j), (chip_w, j))
+            else:
+                plate.fill((20, 20, 20, 220))
+            mask = pygame.Surface((chip_w, chip_h), pygame.SRCALPHA)
+            pygame.draw.rect(mask, (255, 255, 255, 255), mask.get_rect(),
+                             border_radius=chip_h // 2)
+            plate.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+            pygame.draw.rect(plate, accent, plate.get_rect(),
+                             max(1, S(2)),
+                             border_radius=chip_h // 2)
+            plate.blit(label, (pad_x, pad_y))
+
+            # Pre-bake the human-only outer glow plate.
+            if is_human:
+                glow_pad = S(10)
+                glow = pygame.Surface((chip_w + glow_pad * 2,
+                                       chip_h + glow_pad * 2),
+                                      pygame.SRCALPHA)
+                for k, alpha in ((glow_pad, 30), (glow_pad // 2, 60), (S(2), 110)):
+                    pygame.draw.rect(glow, (*accent, alpha),
+                                     (k, k, chip_w + (glow_pad - k) * 2,
+                                      chip_h + (glow_pad - k) * 2),
+                                     border_radius=chip_h // 2 + (glow_pad - k))
+                self._turn_banner_glow = glow
+                self._turn_banner_glow_pad = glow_pad
+            else:
+                self._turn_banner_glow = None
+                self._turn_banner_glow_pad = 0
+
+            self._turn_banner_plate = plate
+            self._turn_banner_size = (chip_w, chip_h)
+            self._turn_banner_key = cache_key
+
+        chip_w, chip_h = self._turn_banner_size
+        chip_x = SCREEN_WIDTH // 2 - chip_w // 2
+        chip_y = STATUS_BAR_H + S(18)
+
+        if self._turn_banner_glow is not None:
+            pulse = 0.7 + 0.3 * abs(math.sin(pygame.time.get_ticks() * 0.004))
+            self._turn_banner_glow.set_alpha(int(255 * pulse))
+            gp = self._turn_banner_glow_pad
+            self.screen.blit(self._turn_banner_glow, (chip_x - gp, chip_y - gp))
+        self.screen.blit(self._turn_banner_plate, (chip_x, chip_y))
+
+    def _draw_active_player_halo(self, game_manager):
+        """Soft radial spotlight around the active seat. The radial gradient
+        surface is cached per (is_human, seat) — we only blit + alpha-pulse
+        per frame, instead of rebuilding 18 nested circles every frame."""
+        cp = game_manager.current_player()
+        seat_index = cp.seat_index
+        num_players = len(game_manager.players)
+        center = _get_seat_position(seat_index, num_players)
+        cx, cy = center
+        is_human = cp.is_human
+
+        cache_key = (is_human, num_players, seat_index)
+        if getattr(self, "_halo_cache_key", None) != cache_key:
+            col = (255, 220, 140) if is_human else (180, 150, 90)
+            radius_max = S(280)
+            halo = pygame.Surface((radius_max * 2, radius_max * 2), pygame.SRCALPHA)
+            steps = 14
+            peak_alpha = 60 if is_human else 42
+            for k in range(steps, 0, -1):
+                t = k / steps
+                r = int(radius_max * t)
+                a = int(peak_alpha * (1 - t))
+                if a <= 0:
+                    continue
+                pygame.draw.circle(halo, (*col, a),
+                                   (radius_max, radius_max), r)
+            self._halo_cache_surf = halo
+            self._halo_cache_radius = radius_max
+            self._halo_cache_key = cache_key
+
+        pulse = 0.85 + 0.15 * math.sin(pygame.time.get_ticks() * 0.003)
+        self._halo_cache_surf.set_alpha(int(255 * pulse))
+        rmax = self._halo_cache_radius
+        self.screen.blit(self._halo_cache_surf, (cx - rmax, cy - rmax),
+                         special_flags=pygame.BLEND_RGBA_ADD)
+
     def _draw_active_surface_ring(self, game_manager):
         """C4 — soft pulsing ring around the next legal interaction surface
         (deck if not yet drawn, discard if a card is in hand). Brighter at
@@ -607,23 +727,25 @@ class Renderer:
             fr = face.get_rect(center=(cx + S(2) * k, cy + S(3) * k))
             self.screen.blit(face, fr.topleft)
 
-        # Top card with land animation if just played.
+        # Top card with land animation if just played. paint_face returns a
+        # cached surface — rotate first (returns a fresh surface) and only
+        # then set_alpha, otherwise we mutate the shared cache and turn
+        # every card on the table semi-transparent.
         land_t = getattr(self, "_discard_land_t", None)
         now = pygame.time.get_ticks() / 1000.0
+        cached_face = card_render.paint_face(top_card, CARD_WIDTH, CARD_HEIGHT)
         if land_t is not None and now - land_t < 0.4:
             t = (now - land_t) / 0.4
             ease = 1 - (1 - t) ** 3
             offset_y = int(-S(28) * (1 - ease))
             alpha = int(255 * (0.55 + 0.45 * ease))
-            face = card_render.paint_face(top_card, CARD_WIDTH, CARD_HEIGHT)
-            face.set_alpha(alpha)
             angle = -3 + (1 - ease) * 6
-            face = pygame.transform.rotate(face, angle)
+            face = pygame.transform.rotate(cached_face, angle)
+            face.set_alpha(alpha)
             fr = face.get_rect(center=(cx, cy + offset_y))
             self.screen.blit(face, fr.topleft)
         else:
-            face = card_render.paint_face(top_card, CARD_WIDTH, CARD_HEIGHT)
-            face = pygame.transform.rotate(face, -3)
+            face = pygame.transform.rotate(cached_face, -3)
             fr = face.get_rect(center=(cx, cy))
             self.screen.blit(face, fr.topleft)
 
@@ -1347,15 +1469,18 @@ class Renderer:
         self.animation_queue.add(arc_their)
         note_y = (my_center[1] + their_center[1]) / 2 - S(60)
         note_x = (my_center[0] + their_center[0]) / 2
-        notif = VisualEvent(
-            VisualEventType.NOTIFICATION_TEXT,
-            start_pos=(note_x, note_y),
-            end_pos=(note_x, note_y),
-            duration=self.effective_anim_duration(ANIM_NOTIFICATION_DURATION),
-            text=f"Received: {card_received.display_name}",
-            text_color=GOLD,
-        )
-        self.animation_queue.add(notif)
+        # AI seen_swap can pick an empty opponent slot (card_received=None);
+        # only render the "Received: <card>" caption when there's a card.
+        if card_received is not None:
+            notif = VisualEvent(
+                VisualEventType.NOTIFICATION_TEXT,
+                start_pos=(note_x, note_y),
+                end_pos=(note_x, note_y),
+                duration=self.effective_anim_duration(ANIM_NOTIFICATION_DURATION),
+                text=f"Received: {card_received.display_name}",
+                text_color=GOLD,
+            )
+            self.animation_queue.add(notif)
 
     def push_discard_animation(self, game_manager):
         drawn_cx, drawn_cy = DRAWN_CARD_POS

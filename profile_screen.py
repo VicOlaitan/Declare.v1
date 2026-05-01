@@ -153,30 +153,50 @@ class ProfileScreen:
     def _draw_backs(self, prof, th):
         import card_render
         from config import CARD_WIDTH, CARD_HEIGHT
+        wins = prof.stats.games_won
+        # 4-tuple: (cache_key, label, unlocked, unlock_hint)
         styles = [
-            ("classic",       "Classic",       True),
-            ("deco_brass",    "Brass",         "deco_brass" in prof.unlocked_card_backs),
-            ("deco_emerald",  "Emerald",       "deco_emerald" in prof.unlocked_card_backs),
-            ("deco_obsidian", "Obsidian",      "deco_obsidian" in prof.unlocked_card_backs),
+            ("classic",       "Classic",  True,
+                None),
+            ("deco_brass",    "Brass",    "deco_brass" in prof.unlocked_card_backs,
+                f"Win 5 games  ({wins}/5)"),
+            ("deco_emerald",  "Emerald",  "deco_emerald" in prof.unlocked_card_backs,
+                f"Win 15 games  ({wins}/15)"),
+            ("deco_obsidian", "Obsidian", "deco_obsidian" in prof.unlocked_card_backs,
+                f"Win 40 games  ({wins}/40)"),
         ]
         gx = SCREEN_WIDTH // 2 - S(540)
         gy = S(200)
-        for i, (key, label, unlocked) in enumerate(styles):
+        for i, (key, label, unlocked, unlock_hint) in enumerate(styles):
             rx = gx + i * S(280)
             ry = gy + S(20)
-            back_surf = card_render.paint_back(key if unlocked else "classic",
-                                                CARD_WIDTH * 2, CARD_HEIGHT * 2)
+            # Always render the style's own art (so the player can see what
+            # they're working toward). paint_back returns a CACHED surface —
+            # copy it before mutating with the lock overlay, otherwise the
+            # dim is baked into every other place that paints this back.
+            cached = card_render.paint_back(key, CARD_WIDTH * 2, CARD_HEIGHT * 2)
+            back_surf = cached.copy()
             if not unlocked:
                 lock = pygame.Surface((CARD_WIDTH * 2, CARD_HEIGHT * 2), pygame.SRCALPHA)
-                lock.fill((0, 0, 0, 180))
+                lock.fill((0, 0, 0, 130))
                 back_surf.blit(lock, (0, 0))
+                # Padlock glyph centered on the locked preview.
+                lock_font = self._tab_font
+                lock_glyph = lock_font.render("LOCKED", True, th.brass_300)
+                back_surf.blit(lock_glyph, lock_glyph.get_rect(
+                    center=(CARD_WIDTH, CARD_HEIGHT)))
             self.screen.blit(back_surf, (rx, ry))
             label_color = th.brass_300 if unlocked else th.text_muted
             l_surf = self._tab_font.render(label, True, label_color)
-            self.screen.blit(l_surf, l_surf.get_rect(midtop=(rx + CARD_WIDTH, ry + CARD_HEIGHT * 2 + S(12))))
-            if not unlocked:
-                hint = self._small_font.render("Locked", True, th.text_muted)
-                self.screen.blit(hint, hint.get_rect(midtop=(rx + CARD_WIDTH, ry + CARD_HEIGHT * 2 + S(40))))
+            self.screen.blit(l_surf, l_surf.get_rect(
+                midtop=(rx + CARD_WIDTH, ry + CARD_HEIGHT * 2 + S(12))))
+            if not unlocked and unlock_hint:
+                # Show a "Win N games (M/N)" hint so the player knows how
+                # to unlock — pulled from profile.evaluate_achievements
+                # which actually awards them.
+                hint_surf = self._small_font.render(unlock_hint, True, th.brass_500)
+                self.screen.blit(hint_surf, hint_surf.get_rect(
+                    midtop=(rx + CARD_WIDTH, ry + CARD_HEIGHT * 2 + S(44))))
 
     def handle_event(self, event, prof):
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:

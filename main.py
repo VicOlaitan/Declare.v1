@@ -251,7 +251,10 @@ class _ScaledDisplay:
         if win_size == (SCREEN_WIDTH, SCREEN_HEIGHT):
             self.window.blit(source, (0, 0))
         else:
-            scaled = pygame.transform.smoothscale(source, win_size)
+            # pygame.transform.scale (nearest neighbor) is several ms cheaper
+            # per frame than smoothscale at 4K → window. Visual impact is
+            # minimal because the source is already rendered at 4K detail.
+            scaled = pygame.transform.scale(source, win_size)
             self.window.blit(scaled, (0, 0))
         pygame.display.flip()
 
